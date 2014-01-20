@@ -22,6 +22,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x86</PlatformTarget>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -32,6 +33,8 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86" />
+    <Reference Include="Microsoft.Xna.Framework.Graphics, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86" />
     <Reference Include="OpenCvSharp">
       <HintPath>..\..\..\..\Resource\opencv\OpenCvSharp.dll</HintPath>
     </Reference>
@@ -46,6 +49,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BitmapHandler.cs" />
     <Compile Include="BitmapIterator.cs" />
     <Compile Include="DraggablePictureBox.cs">
       <SubType>UserControl</SubType>
@@ -53,10 +57,17 @@
     <Compile Include="DraggablePictureBox.Designer.cs">
       <DependentUpon>DraggablePictureBox.cs</DependentUpon>
     </Compile>
+    <Compile Include="FLib.cs" />
     <Compile Include="FMath.cs" />
+    <Compile Include="XNAControl\XNAControl.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="XNAControl\XNAService.cs" />
     <Compile Include="LazyBrush.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="XNAControl\XNAServiceContainer.cs" />
     <Compile Include="TrappedBallSegmentation.cs" />
+    <Compile Include="XNATexture.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="DraggablePictureBox.resx">
