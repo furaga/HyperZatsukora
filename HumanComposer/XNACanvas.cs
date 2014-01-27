@@ -15,10 +15,18 @@ namespace HumanComposer
         Texture2D Texture = null;
         Color[] texData = null;
 
+        Skeleton skeleton;
+
         protected override void Initialize()
         {
             spriteBatch = new SpriteBatch(GraphicsDevice);
             XNATexture.Load(GraphicsDevice, "dummy.png", out Texture, out texData);
+
+            // スケルトンを作成
+
+
+
+            skeleton = new Skeleton(null);
         }
 
         protected override void Draw()

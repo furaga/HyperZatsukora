@@ -59,6 +59,9 @@
     </Compile>
     <Compile Include="FLib.cs" />
     <Compile Include="FMath.cs" />
+    <Compile Include="PriorityQueue.cs" />
+    <Compile Include="Skeleton\Joint.cs" />
+    <Compile Include="Skeleton\Skeleton.cs" />
     <Compile Include="XNAControl\XNAControl.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -73,6 +76,9 @@
     <EmbeddedResource Include="DraggablePictureBox.resx">
       <DependentUpon>DraggablePictureBox.cs</DependentUpon>
     </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="TODO.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

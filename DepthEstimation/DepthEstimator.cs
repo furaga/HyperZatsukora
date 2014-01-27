@@ -69,11 +69,12 @@ namespace DepthEstimation
             AggregatePatches(patches);
             DrawAggregatedPatches(patches, randColors);
 
+
             // LazyBrushで残りの領域を塗りつぶす
-            using (LazyBrush lb = new LazyBrush(Edge, AggregatedPatches, 0.05f))
+            using (TrappedBallSegmentation tb = new TrappedBallSegmentation(Lab, Edge))
             {
-                lb.Execute();
-                Region = new Bitmap(lb.brushedImage);
+                tb.Execute();
+                Region = new Bitmap(tb.brushedImage);
             }
         }
 
@@ -262,7 +263,7 @@ namespace DepthEstimation
             Patches.Save(dir + "Patches.png");
             AggregatedPatches.Save(dir + "AggregatedPatches.png");
             Edge.Save(dir + "Edge.png");
-//            Region.Save(dir + "Region.png");
+            Region.Save(dir + "Region.png");
         }
 
         #endregion
