@@ -9,6 +9,7 @@ using System.IO.Ports;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Diagnostics;
+using System.Xml.Serialization;
 
 namespace FLib
 {
@@ -17,12 +18,13 @@ namespace FLib
         const float ratio = 1 / 1023f;
 
         int sensorNum = 0;
-        int sensorNumParFoot = 0;
+        int sensorNumPerFoot = 0;
 
         SerialPort serialPort;
         List<byte> rawData = new List<byte>();
         List<float> pressureData = new List<float>();
         List<long> timeStamps = new List<long>(); // 各フレームの取得時間
+        List<int> rPinTovPin = new List<int>(); // 現実のピンと仮想ピンの対応関係
         int[] tmpLowData;
         int[] tmpSensorIdx = new int[2] { 0, 0 };
 
@@ -47,8 +49,81 @@ namespace FLib
             serialPort_DataReceived(null, null);
         }
 
+        #region  圧力データの保存・ロード
+        public void Save(string filepath)
+        {
+            try
+            {
+                StringBuilder sb = new StringBuilder();
+                sb.Append("sensorNumPerFoot:\n");
+                sb.Append(sensorNumPerFoot + "\n");
+                sb.Append("rPinTovPin:\n");
+                sb.Append(string.Join(" ", rPinTovPin));
+                sb.Append("\n");
+                sb.Append("rawData:\n");
+                sb.Append(string.Join(" ", rawData));
+                sb.Append("\n");
+                sb.Append("pressureData:\n");
+                sb.Append(string.Join(" ", pressureData));
+                sb.Append("\n");
+                sb.Append("timeStamps:\n");
+                sb.Append(string.Join(" ", timeStamps));
+                sb.Append("\n");
+                sb.Append("end:\n");
+                System.IO.File.WriteAllText(filepath, sb.ToString());
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show(e.ToString() + ":" + e.StackTrace);
+            }
+        }
+
+        public void Load(string filepath)
+        {
+            try
+            {
+                System.IO.StringReader sr = new System.IO.StringReader(System.IO.File.ReadAllText(filepath));
+                while (true)
+                {
+                    string line = sr.ReadLine();
+                    switch (line.Trim().Trim('\n', '\r', ':'))
+                    {
+                        case "sensorNumPerFoot":
+                            line = sr.ReadLine().Trim();
+                            sensorNumPerFoot = int.Parse(line);
+                            sensorNum = sensorNumPerFoot * 2;
+                            break;
+                        case "rawData":
+                            line = sr.ReadLine().Trim();
+                            rawData = line.Split(' ').Select(s => byte.Parse(s)).ToList();
+                            break;
+                        case "pressureData":
+                            line = sr.ReadLine().Trim();
+                            pressureData = line.Split(' ').Select(s => float.Parse(s)).ToList();
+                            break;
+                        case "timeStamps":
+                            line = sr.ReadLine().Trim();
+                            timeStamps = line.Split(' ').Select(s => long.Parse(s)).ToList();
+                            break;
+                        case "rPinTovPin":
+                            line = sr.ReadLine().Trim();
+                            rPinTovPin = line.Split(' ').Select(s => int.Parse(s)).ToList();
+                            break;
+                        case "end":
+                            OnUpdate();
+                            return;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                MessageBox.Show(e.ToString() + ":" + e.StackTrace);
+            }
+        }
+        #endregion
+
         #region  初期化
-        public SockswitchSensor(string portName, int baudRate, Parity parity, int dataBits, StopBits stopBits, int sensorNumPerFoot)
+        public SockswitchSensor(string portName, int baudRate, Parity parity, int dataBits, StopBits stopBits, int sensorNumPerFoot, Action OnUpdate)
         {
             try
             {
@@ -75,10 +150,12 @@ namespace FLib
                     serialTimer.Tick += new EventHandler(timer_Tick);
                     dummySerialMode = true;
                 }
-                this.sensorNumParFoot = sensorNumPerFoot;
+                this.sensorNumPerFoot = sensorNumPerFoot;
                 this.sensorNum = 2 * sensorNumPerFoot;
                 tmpLowData = new int[sensorNum];
                 for (int i = 0; i < tmpLowData.Length; i++) tmpLowData[i] = -1;
+                for (int i = 0; i < sensorNum; i++) rPinTovPin.Add(i);
+                this.OnUpdate = OnUpdate;
             }
             catch (Exception ex)
             {
@@ -107,7 +184,7 @@ namespace FLib
                     switch (type)
                     {
                         case 0:     // センサのID
-                            sensorIdx = (data[i] & 0x7) + side * sensorNumParFoot;
+                            sensorIdx = (data[i] & 0x7) + side * sensorNumPerFoot;
                             tmpSensorIdx[side] = sensorIdx;
                             break;
                         case 1:     // 下位ビット
@@ -128,7 +205,7 @@ namespace FLib
                 }
             }
         }
-        public float[] GetPressureData(int frameIdx)
+        public float[] GetPressureData(int frameIdx, out long timeStamp)
         {
             float[] data = new float[sensorNum];
             for (int i = 0; i < data.Length; i++)
@@ -144,6 +221,7 @@ namespace FLib
                     break;
                 }
             }
+            timeStamp = frameIdx < timeStamps.Count ? timeStamps[frameIdx] : 0;
             return data;
         }
         #endregion
@@ -158,11 +236,11 @@ namespace FLib
                 int dataIdx = 0;
                 for (int i = 0; i < sensorNum; i++)
                 {
-                    int side = (i < sensorNumParFoot ? 0 : 1) << 5;
+                    int side = (i < sensorNumPerFoot ? 0 : 1) << 5;
                     int val = sensorIdx == i ? (int)(force * 0.002f * 1023) : 0;
                     int high = (val >> 5) & 0x1f;
                     int low = val & 0x1f;
-                    byte info = (byte)((0 << 6) | side | (i % sensorNumParFoot));
+                    byte info = (byte)((0 << 6) | side | (i % sensorNumPerFoot));
                     byte lowValue = (byte)((1 << 6) | side | low);
                     byte highValue = (byte)((2 << 6) | side | high);
                     data[dataIdx++] = info;
@@ -191,7 +269,6 @@ namespace FLib
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message + ":" + ex.StackTrace);
-
             }
         }
         #endregion

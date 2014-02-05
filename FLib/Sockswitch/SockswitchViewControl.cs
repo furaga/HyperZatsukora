@@ -85,7 +85,8 @@ namespace FLib
 
         public void UpdateSensorForces(SockswitchSensor sensor, int frameIdx)
         {
-            float[] data = sensor.GetPressureData(sensor.FrameCount - 1);
+            long timeStamp;
+            float[] data = sensor.GetPressureData(frameIdx, out timeStamp);
             if (data != null)
             {
                 for (int i = 0; i < Math.Min(data.Length, SensorForces.Count); i++)
