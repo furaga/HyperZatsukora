@@ -71,11 +71,13 @@ namespace DepthEstimation
 
 
             // LazyBrushで残りの領域を塗りつぶす
+            System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
             using (TrappedBallSegmentation tb = new TrappedBallSegmentation(Lab, Edge))
             {
                 tb.Execute();
                 Region = new Bitmap(tb.brushedImage);
             }
+            Console.WriteLine("TrappedBallSegmentation: " + sw.ElapsedMilliseconds + " ms");
         }
 
         unsafe Patch[] GetPatches()

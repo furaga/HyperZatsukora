@@ -112,145 +112,107 @@ namespace FLib
             }
         }
 
-        unsafe List<Bitmap> MoveBall(HashSet<Point> uncoloredPixels, int[] labelMap, int radius, BitmapIterator edgeIter, BitmapIterator orgIter, int[] ballSizeList)
+        unsafe List<Bitmap> MoveBall(HashSet<int> orgUncoloredPixels, int[] labelMap, int radius, BitmapIterator edgeIter, BitmapIterator orgIter, int[] ballSizeList)
         {
             System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
-
+            System.Diagnostics.Stopwatch sw2 = new Stopwatch();
 
             List<Bitmap> segments = new List<Bitmap>();
             byte* edgeData = (byte*)edgeIter.PixelData;
             int ballSize = 1 + 2 * radius;
+            HashSet<int> uncoloredPixels = new HashSet<int>(orgUncoloredPixels);
+            Queue<int> uncoloredPixelList = new Queue<int>(orgUncoloredPixels);
 
-            Bitmap segmentImage = null;
-
-            bool segmentFound = true;
-
-            while (segmentFound)
+            while (uncoloredPixels.Count >= 1)
             {
-                segmentFound = false;
-                foreach (Point pt in uncoloredPixels)
-                {
-                    int x = pt.X;
-                    int y = pt.Y;
-                    int idx = x + y * edgeImage.Width;
-                    // ボールが入るか
-                    if (ballSizeList[idx] < ballSize) continue;
+                int idx = uncoloredPixelList.Dequeue();
+                if (!uncoloredPixels.Contains(idx)) continue;
+                uncoloredPixels.Remove(idx);
 
-                    // 彩色済みか
-                    bool colored = false;
-                    for (int yy = y; yy < y + ballSize; yy++)
-                        for (int xx = x; xx < x + ballSize; xx++)
-                            if (!uncoloredPixels.Contains(new Point(xx, yy)))
-                            {
-                                colored = true;
-                                goto COLORED_DECIDED;
-                            }
+                int x, y;
+                y = Math.DivRem(idx, edgeImage.Width, out x);
 
-                COLORED_DECIDED:
+                // ボールが入るか
+                if (ballSizeList[idx] < ballSize) continue;
 
-                    if (colored) continue;
-
-
-
-                Console.WriteLine("color decision: " + sw.ElapsedMilliseconds + " ms");
-                sw.Restart();
-
-
-
-                    segmentImage = new Bitmap(edgeImage.Width, edgeImage.Height, PixelFormat.Format32bppArgb);
-                    using (Graphics g = Graphics.FromImage(segmentImage))
-                    {
-                        g.Clear(Color.Transparent);
-                    }
-
-                    int roiMinX = int.MaxValue;
-                    int roiMinY = int.MaxValue;
-                    int roiMaxX = int.MinValue;
-                    int roiMaxY = int.MinValue;
-
-                    using (BitmapIterator segmentIter = new BitmapIterator(segmentImage, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb))
-                    {
-                        byte* segmentData = (byte*)segmentIter.PixelData;
-                        Random rand = new Random();
-                        Color c = Color.FromArgb(rand.Next(255) + 1, rand.Next(255) + 1, rand.Next(255) + 1);
-
-                        for (int yy = y; yy < y + ballSize - 1; yy++)
-                            for (int xx = x; xx < x + ballSize - 1; xx++)
-                            {
-                                segmentData[4 * xx + yy * segmentIter.Stride] = c.B;
-                                segmentData[4 * xx + yy * segmentIter.Stride + 1] = c.G;
-                                segmentData[4 * xx + yy * segmentIter.Stride + 2] = c.R;
-                                segmentData[4 * xx + yy * segmentIter.Stride + 3] = 255;
-                            }
-
-                        Console.WriteLine("init fill: " + sw.ElapsedMilliseconds + " ms");
-                        sw.Restart();
-
-                        
-                        // 新しい色でFlood fill
-                        HashSet<Point> initPoints = new HashSet<Point>();
-                        for (int yy = y; yy < y + radius * 2; yy++) initPoints.Add(new Point(x, yy));
-                        for (int yy = y; yy < y + radius * 2; yy++) initPoints.Add(new Point(x + ballSize - 1, yy));
-                        for (int xx = x; xx < x + radius * 2; xx++) initPoints.Add(new Point(xx, y));
-                        for (int xx = x; xx < x + radius * 2; xx++) initPoints.Add(new Point(xx, y + ballSize - 1));
-
-                        FloodFill(initPoints, segmentIter, c, uncoloredPixels, edgeIter, orgIter);
-
-                        Console.WriteLine("flood fill: " + sw.ElapsedMilliseconds + " ms");
-                        sw.Restart();
-
-                        for (int yy = 0; yy < edgeImage.Height; yy++)
-                            for (int xx = 0; xx < edgeImage.Width; xx++)
-                            {
-                                if (segmentData[4 * xx + yy * segmentIter.Stride + 3] != 0)
-                                {
-                                    roiMinX = Math.Min(roiMinX, xx);
-                                    roiMaxX = Math.Max(roiMaxX, xx);
-                                    roiMinY = Math.Min(roiMinY, yy);
-                                    roiMaxY = Math.Max(roiMaxY, yy);
-                                }
-                            }
-
-                        Console.WriteLine("get ROI: " + sw.ElapsedMilliseconds + " ms");
-                        sw.Restart();
-                    }
-
-                    using (IplImage iplPart = BitmapConverter.ToIplImage(segmentImage))
-                    {
-                        Cv.SetImageROI(iplPart, new CvRect(roiMinX - 1, roiMinY - 1, roiMaxX - roiMinX + 2, roiMaxY - roiMinY + 2));
-                        IplConvKernel kernel = new IplConvKernel(2 * radius + 1, 2 * radius + 1, radius, radius, ElementShape.Ellipse);
-                        Cv.Erode(iplPart, iplPart, kernel, 1);
-                        Cv.Dilate(iplPart, iplPart, kernel, 1);
-                        Cv.ResetImageROI(iplPart);
-                        segmentImage.Dispose();
-                        segmentImage = BitmapConverter.ToBitmap(iplPart);
-                        segments.Add(segmentImage);
-
-                        segmentImage.Save(radius + "_" + segments.Count + ".png");
-                    }
-
-                    Console.WriteLine("erode: " + sw.ElapsedMilliseconds + " ms");
-                    sw.Restart();
-
-                    segmentFound = true;
-                    break;
-                }
-
-                if (segmentFound)
-                {
-                    using (BitmapIterator segmentIter = new BitmapIterator(segmentImage, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb))
-                    {
-                        Point[] coloredPixels = uncoloredPixels.Where(p => ((byte*)segmentIter.PixelData)[4 * p.X + p.Y * segmentIter.Stride + 3] != 0).ToArray();
-                        foreach (Point pt in coloredPixels)
+                // 彩色済みなら塗らない
+                bool colored = false;
+                for (int yy = y; yy < y + ballSize; yy++)
+                    for (int xx = x; xx < x + ballSize; xx++)
+                        if (!(y == yy && x == xx) && !uncoloredPixels.Contains(xx + yy * edgeImage.Width))
                         {
-                            labelMap[pt.X + pt.Y * edgeImage.Width] = segmentCnt;
-                            uncoloredPixels.Remove(pt);
+                            colored = true;
+                            goto COLORED_DECIDED;
                         }
-                        segmentCnt++;
+
+            COLORED_DECIDED:
+            
+                if (colored) continue;
+
+                // 新しいセグメント
+                using (IplImage segmentImage = new IplImage(edgeImage.Width, edgeImage.Height, BitDepth.U8, 4))
+                {
+                    Cv.Set(segmentImage, new CvScalar(0, 0, 0, 0));
+
+                    Random rand = new Random();
+                    Color c = Color.FromArgb(rand.Next(255) + 1, rand.Next(255) + 1, rand.Next(255) + 1);
+
+                    Cv.Rectangle(segmentImage, x + 1, y + 1, x + ballSize - 1, y + ballSize - 1, Cv.RGB(c.R, c.G, c.B));
+
+                    // 新しい色でFlood fill
+                    HashSet<int> initPoints = new HashSet<int>();
+                    for (int yy = y; yy < y + ballSize - 1; yy++)
+                    {
+                        initPoints.Add(x + yy * edgeImage.Width);
+                        initPoints.Add((x + ballSize - 1) + yy * edgeImage.Width);
                     }
+                    for (int xx = x; xx < x + ballSize - 1; xx++)
+                    {
+                        initPoints.Add(xx + y * edgeImage.Width);
+                        initPoints.Add(xx + (y + ballSize - 1) * edgeImage.Width);
+                    }
+
+                    CvRect roi = FloodFill(initPoints, segmentImage, c, uncoloredPixels, orgIter, sw2);
+
+
+
+                    sw2.Start();
+
+                    Cv.SetImageROI(segmentImage, roi);
+                    {
+                        IplConvKernel kernel = new IplConvKernel(2 * radius + 1, 2 * radius + 1, radius, radius, ElementShape.Ellipse);
+                        Cv.Erode(segmentImage, segmentImage, kernel, 1);
+                        Cv.Dilate(segmentImage, segmentImage, kernel, 1);
+                    }
+                    Cv.ResetImageROI(segmentImage);
+
+
+                    for (int yy = roi.Y; yy < roi.Bottom; yy++)
+                        for (int xx = roi.X; xx < roi.Right; xx++)
+                            if (segmentImage.ImageDataPtr[4 * xx + yy * segmentImage.WidthStep + 3] != 0)
+                            {
+                                int idx2 = xx + yy * edgeImage.Width;
+                                labelMap[idx2] = segmentCnt;
+                                uncoloredPixels.Remove(idx2);
+                                orgUncoloredPixels.Remove(idx2);
+                            }
+                    segmentCnt++;
+
+                    Bitmap segmentBmp = BitmapConverter.ToBitmap(segmentImage);
+                    segments.Add(segmentBmp);
+
+                    sw2.Stop();
                 }
             }
 
+            if (segments.Count >= 1) segments.First().Save(radius + ".png");
+
+            if (sw.ElapsedMilliseconds >= 1000)
+            {
+                Console.WriteLine("[radius=" + radius + "]");
+                Console.WriteLine("total= " + sw.ElapsedMilliseconds + " ms");
+                Console.WriteLine("total= " + sw2.ElapsedMilliseconds + " ms");
+            }
             return segments;
         }
 
@@ -264,28 +226,42 @@ namespace FLib
             // 充填できるボールサイズを事前計算
             int maxBallSize, minBallSize;
             int[] ballSizeList = CalcBallSize(edgeImage, out maxBallSize, out minBallSize);
-            int maxRadius = ((maxBallSize / 2) / deltaRadius) * deltaRadius;
+            int maxRadius = ((maxBallSize / 2) / deltaRadius - 1) * deltaRadius;
             int minRadius = ((minBallSize / 2) / deltaRadius + 1) * deltaRadius;
-            FlashArrayToBitmap(ballSizeList, edgeImage.Width, edgeImage.Height, brushedImage);
+//            FlashArrayToBitmap(ballSizeList, edgeImage.Width, edgeImage.Height, brushedImage);
 
+
+            // 出力
             Dictionary<Bitmap, int> segmentList = new Dictionary<Bitmap, int>();
-
-            HashSet<Point> uncheckPixels = new HashSet<Point>();
             int[] labelMap = new int[edgeImage.Width * edgeImage.Height];
 
-            for (int y = 0; y < edgeImage.Height; y++)
-                for (int x = 0; x < edgeImage.Width; x++)
-                    uncheckPixels.Add(new Point(x, y));
+            // 塗るべきピクセルを追加
+            HashSet<int> uncoloredPixels = new HashSet<int>();
+            using (BitmapIterator edgeIter = new BitmapIterator(edgeImage, ImageLockMode.ReadOnly, PixelFormat.Format8bppIndexed))
+            {
+                byte* edgeData = (byte*)edgeIter.PixelData;
+                int i = 0;
+                for (int y = 0; y < edgeImage.Height; y++)
+                {
+                    for (int x = 0; x < edgeImage.Width; x++)
+                    {
+                        if (edgeData[x + y * edgeIter.Stride] <= edgeThreshold)
+                            uncoloredPixels.Add(i);
+                        i++;
+                    }
+                }
+            }
 
             // エッジの間に大雑把に色を塗っていく
             using (BitmapIterator edgeIter = new BitmapIterator(edgeImage, ImageLockMode.ReadOnly, PixelFormat.Format8bppIndexed))
             using (BitmapIterator orgIter = new BitmapIterator(orgImage, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb))
             {
                 byte* edgeData = (byte*)edgeIter.PixelData;
+
                 // ボールを徐々に小さくしながらTrappedBallSegmentation
                 for (int radius = maxRadius; radius >= minRadius; radius -= deltaRadius)
                 {
-                    List<Bitmap> segments = MoveBall(uncheckPixels, labelMap, radius, edgeIter, orgIter, ballSizeList);
+                    List<Bitmap> segments = MoveBall(uncoloredPixels, labelMap, radius, edgeIter, orgIter, ballSizeList);
                     for (int i = 0; i < segments.Count; i++)
                     {
                         segmentList[segments[i]] = radius;
@@ -294,6 +270,7 @@ namespace FLib
 
                 Console.WriteLine("move ball: done");
 
+// TODO                RegionGrowing(...);
                 using (Graphics g = Graphics.FromImage(brushedImage))
                 {
                     foreach (var kv in segmentList)
@@ -304,111 +281,113 @@ namespace FLib
                     }
                 }
 
-                Point[] deltas = new Point[] { new Point(-1, 0), new Point(1, 0), new Point(0, -1), new Point(0, 1) };
+                /*
+                                Point[] deltas = new Point[] { new Point(-1, 0), new Point(1, 0), new Point(0, -1), new Point(0, 1) };
 
-                byte* orgData = (byte*)orgIter.PixelData;
+                                byte* orgData = (byte*)orgIter.PixelData;
 
-                float threshold = sqColorDistThreshold;
+                                float threshold = sqColorDistThreshold;
 
-                while (uncheckPixels.Count >= 1 && threshold <= 1000000)
-                {
-                    // ラベルが塗られていない領域と接するピクセル集合
-                    PriorityQueue<ContourPixel> contours = new PriorityQueue<ContourPixel>();
-                    HashSet<Point> tmp_contours = new HashSet<Point>();
-                    foreach (Point pt in uncheckPixels)
-                    {
-                        if (!uncheckPixels.Contains(new Point(pt.X - 1, pt.Y))) tmp_contours.Add(new Point(pt.X - 1, pt.Y));
-                        if (!uncheckPixels.Contains(new Point(pt.X, pt.Y - 1))) tmp_contours.Add(new Point(pt.X, pt.Y - 1));
-                        if (!uncheckPixels.Contains(new Point(pt.X + 1, pt.Y))) tmp_contours.Add(new Point(pt.X + 1, pt.Y));
-                        if (!uncheckPixels.Contains(new Point(pt.X, pt.Y + 1))) tmp_contours.Add(new Point(pt.X, pt.Y + 1));
-                    }
-                    foreach (Point pt in tmp_contours)
-                    {
-                        if (pt.X < 0 || edgeImage.Width <= pt.X || pt.Y < 0 || edgeImage.Height <= pt.Y) continue;
-                        contours.Push(new ContourPixel(pt, 0));
-                    }
-
-                    Console.WriteLine("init contour: done");
-
-                    // エッジは削除
-                    uncheckPixels.RemoveWhere(pt => edgeData[pt.X + pt.Y * edgeIter.Stride] > edgeThreshold);
-
-                    while (contours.Count >= 1)
-                    {
-                        ContourPixel cpt = contours.Top;
-                        contours.Pop();
-                        if (cpt.error >= sqColorDistThreshold)
-                        {
-                            break;
-                        }
-                        Point pt = cpt.Point;
-                        foreach (Point delta in deltas)
-                        {
-                            Point neighbor = new Point(pt.X + delta.X, pt.Y + delta.Y);
-                            if (uncheckPixels.Contains(neighbor))
-                            {
-                                if (SqColorDist(orgIter, pt.X, pt.Y, neighbor.X, neighbor.Y) <= threshold)
+                                while (uncoloredPixels.Count >= 1 && threshold <= 1000000)
                                 {
-                                    contours.Push(new ContourPixel(neighbor, 0));
-                                    labelMap[neighbor.X + neighbor.Y * edgeImage.Width] = labelMap[pt.X + pt.Y * edgeImage.Width];
-                                    // brushedImage.SetPixel(neighbor.X, neighbor.Y, brushedImage.GetPixel(pt.X, pt.Y));
-                                    uncheckPixels.Remove(neighbor);
+                                    // ラベルが塗られていない領域と接するピクセル集合
+                                    PriorityQueue<ContourPixel> contours = new PriorityQueue<ContourPixel>();
+                                    HashSet<Point> tmp_contours = new HashSet<Point>();
+                                    foreach (Point pt in uncoloredPixels)
+                                    {
+                                        if (!uncoloredPixels.Contains(new Point(pt.X - 1, pt.Y))) tmp_contours.Add(new Point(pt.X - 1, pt.Y));
+                                        if (!uncoloredPixels.Contains(new Point(pt.X, pt.Y - 1))) tmp_contours.Add(new Point(pt.X, pt.Y - 1));
+                                        if (!uncoloredPixels.Contains(new Point(pt.X + 1, pt.Y))) tmp_contours.Add(new Point(pt.X + 1, pt.Y));
+                                        if (!uncoloredPixels.Contains(new Point(pt.X, pt.Y + 1))) tmp_contours.Add(new Point(pt.X, pt.Y + 1));
+                                    }
+                                    foreach (Point pt in tmp_contours)
+                                    {
+                                        if (pt.X < 0 || edgeImage.Width <= pt.X || pt.Y < 0 || edgeImage.Height <= pt.Y) continue;
+                                        contours.Push(new ContourPixel(pt, 0));
+                                    }
+
+                                    Console.WriteLine("init contour: done");
+
+                                    // エッジは削除
+                                    uncoloredPixels.RemoveWhere(pt => edgeData[pt.X + pt.Y * edgeIter.Stride] > edgeThreshold);
+
+                                    while (contours.Count >= 1)
+                                    {
+                                        ContourPixel cpt = contours.Top;
+                                        contours.Pop();
+                                        if (cpt.error >= sqColorDistThreshold)
+                                        {
+                                            break;
+                                        }
+                                        Point pt = cpt.Point;
+                                        foreach (Point delta in deltas)
+                                        {
+                                            Point neighbor = new Point(pt.X + delta.X, pt.Y + delta.Y);
+                                            if (uncoloredPixels.Contains(neighbor))
+                                            {
+                                                if (SqColorDist(orgIter, pt.X, pt.Y, neighbor.X, neighbor.Y) <= threshold)
+                                                {
+                                                    contours.Push(new ContourPixel(neighbor, 0));
+                                                    labelMap[neighbor.X + neighbor.Y * edgeImage.Width] = labelMap[pt.X + pt.Y * edgeImage.Width];
+                                                    // brushedImage.SetPixel(neighbor.X, neighbor.Y, brushedImage.GetPixel(pt.X, pt.Y));
+                                                    uncoloredPixels.Remove(neighbor);
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Console.WriteLine("region growing: done (" + uncoloredPixels.Count + ", " + threshold + ")");
+
+                                    threshold *= 2;
                                 }
-                            }
-                        }
-                    }
 
-                    Console.WriteLine("region growing: done (" + uncheckPixels.Count + ", " + threshold + ")");
+                                Random rand = new Random();
+                                Dictionary<int, Color> segmentColor = new Dictionary<int, Color>();
+                                for (int i = 0; i < segmentCnt; i++)
+                                {
+                                    segmentColor[i] = Color.FromArgb(rand.Next(255), rand.Next(255), rand.Next(255));
+                                }
 
-                    threshold *= 2;
-                }
+                                Dictionary<int, int> segmentCorrespondence = new Dictionary<int, int>();
+                                for (int y = 1; y < edgeImage.Height - 1; y++)
+                                    for (int x = 1; x < edgeImage.Width - 1; x++)
+                                    {
+                                        foreach (Point delta in deltas)
+                                        {
+                                            Point neighbor = new Point(x + delta.X, y + delta.Y);
 
-                Random rand = new Random();
-                Dictionary<int, Color> segmentColor = new Dictionary<int, Color>();
-                for (int i = 0; i < segmentCnt; i++)
-                {
-                    segmentColor[i] = Color.FromArgb(rand.Next(255), rand.Next(255), rand.Next(255));
-                }
+                                            int label0 = labelMap[x + y * edgeImage.Width];
+                                            int label1 = labelMap[neighbor.X + neighbor.Y * edgeImage.Width];
+                                            if (label0 == 0 || label1 == 0 || label0 == label1) continue;
 
-                Dictionary<int, int> segmentCorrespondence = new Dictionary<int, int>();
-                for (int y = 1; y < edgeImage.Height - 1; y++)
-                    for (int x = 1; x < edgeImage.Width - 1; x++)
-                    {
-                        foreach (Point delta in deltas)
-                        {
-                            Point neighbor = new Point(x + delta.X, y + delta.Y);
+                                            while (segmentCorrespondence.ContainsKey(label0)) label0 = segmentCorrespondence[label0];
+                                            while (segmentCorrespondence.ContainsKey(label1)) label1 = segmentCorrespondence[label1];
+                                            if (label0 == label1) continue;
 
-                            int label0 = labelMap[x + y * edgeImage.Width];
-                            int label1 = labelMap[neighbor.X + neighbor.Y * edgeImage.Width];
-                            if (label0 == 0 || label1 == 0 || label0 == label1) continue;
+                                            // 色が同じ領域が隣り合っていたら統合
+                                            if (SqColorDist(orgIter, x, y, neighbor.X, neighbor.Y) <= sqColorDistThreshold)
+                                            {
+                                                segmentCorrespondence[Math.Max(label0, label1)] = Math.Min(label0, label1);
+                                            }
+                                        }
+                                    }
 
-                            while (segmentCorrespondence.ContainsKey(label0)) label0 = segmentCorrespondence[label0];
-                            while (segmentCorrespondence.ContainsKey(label1)) label1 = segmentCorrespondence[label1];
-                            if (label0 == label1) continue;
-
-                            // 色が同じ領域が隣り合っていたら統合
-                            if (SqColorDist(orgIter, x, y, neighbor.X, neighbor.Y) <= sqColorDistThreshold)
-                            {
-                                segmentCorrespondence[Math.Max(label0, label1)] = Math.Min(label0, label1);
-                            }
-                        }
-                    }
-
-                using (BitmapIterator brushIter = new BitmapIterator(brushedImage, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb))
-                {
-                    byte* brushData = (byte*)brushIter.PixelData;
-                    for (int y = 0; y < edgeImage.Height; y++)
-                        for (int x = 0; x < edgeImage.Width; x++)
-                        {
-                            int idx = x + y * edgeImage.Width;
-                            int label = labelMap[idx];
-                            while (segmentCorrespondence.ContainsKey(label)) label = segmentCorrespondence[label];
-                            brushData[4 * x + y * brushIter.Stride + 0] = segmentColor[label].R;
-                            brushData[4 * x + y * brushIter.Stride + 1] = segmentColor[label].G;
-                            brushData[4 * x + y * brushIter.Stride + 2] = segmentColor[label].B;
-                            brushData[4 * x + y * brushIter.Stride + 3] = 255;
-                        }
-                }
+                                using (BitmapIterator brushIter = new BitmapIterator(brushedImage, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb))
+                                {
+                                    byte* brushData = (byte*)brushIter.PixelData;
+                                    for (int y = 0; y < edgeImage.Height; y++)
+                                        for (int x = 0; x < edgeImage.Width; x++)
+                                        {
+                                            int idx = x + y * edgeImage.Width;
+                                            int label = labelMap[idx];
+                                            while (segmentCorrespondence.ContainsKey(label)) label = segmentCorrespondence[label];
+                                            brushData[4 * x + y * brushIter.Stride + 0] = segmentColor[label].R;
+                                            brushData[4 * x + y * brushIter.Stride + 1] = segmentColor[label].G;
+                                            brushData[4 * x + y * brushIter.Stride + 2] = segmentColor[label].B;
+                                            brushData[4 * x + y * brushIter.Stride + 3] = 255;
+                                        }
+                                }
+                 */
             }
         }
 
@@ -446,75 +425,99 @@ namespace FLib
             return sqDist;
         }
 
-        unsafe bool CanFill(Point pt, Point src, HashSet<Point> curs, HashSet<Point> nexts, HashSet<Point> uncoloredPixels, BitmapIterator segmentIter, BitmapIterator edgeIter, BitmapIterator orgIter)
+        unsafe bool CanFill(int idx, int idxSeg, int ptX, int ptY, int srcX, int srcY, HashSet<int> filled, HashSet<int> uncoloredPixels, IplImage segmentImage, BitmapIterator orgIter, Stopwatch sw2 = null)
         {
-            if (!uncoloredPixels.Contains(pt)) return false;
-            if (curs.Contains(pt)) return false;
-            if (nexts.Contains(pt)) return false;
-            if (((byte*)segmentIter.PixelData)[4 * pt.X + pt.Y * segmentIter.Stride + 3] != 0) return false;
-            if (((byte*)edgeIter.PixelData)[pt.X + pt.Y * edgeIter.Stride] >= edgeThreshold) return false;
-            if (SqColorDist(orgIter, src.X, src.Y, pt.X, pt.Y) >= sqColorDistThreshold) return false;
+//            sw2.Start();
+            if (!uncoloredPixels.Contains(idx))
+            {
+  //              sw2.Stop();
+                return false;
+            }
+            if (filled.Contains(idx))
+            {
+    //            sw2.Stop();
+                return false;
+            }
+            if (ptX < 0 || edgeImage.Width <= ptX)
+            {
+      //          sw2.Stop();
+                return false;
+            }
+            if (ptY < 0 || edgeImage.Height <= ptY)
+            {
+        //        sw2.Stop();
+                return false;
+            }
+            if (segmentImage.ImageDataPtr[idxSeg] != 0) 
+            {
+          //      sw2.Stop();
+                return false;
+            }
+            if (SqColorDist(orgIter, srcX, srcY, ptX, ptY) >= sqColorDistThreshold)
+            {
+            //    sw2.Stop();
+                return false;
+            }
+//            sw2.Stop();
             return true;
         }
 
-        unsafe public void FloodFill(HashSet<Point> initPoints, BitmapIterator segmentIter, Color c, HashSet<Point> uncoloredPixels, BitmapIterator edgeIter, BitmapIterator orgIter)
+        unsafe public CvRect FloodFill(HashSet<int> initPoints, IplImage segmentImage, Color c, HashSet<int> uncoloredPixels, BitmapIterator orgIter, Stopwatch sw2 = null)
         {
-            if (initPoints.Count <= 0) return;
-            HashSet<Point> curs = new HashSet<Point>(initPoints);
-            HashSet<Point> nexts = new HashSet<Point>();
-            byte* edgeData = (byte*)edgeIter.PixelData;
-            byte* partData = (byte*)segmentIter.PixelData;
-            int w = edgeIter.Bmp.Width;
-
-
-
+            int roiMinX = int.MaxValue;
+            int roiMinY = int.MaxValue;
+            int roiMaxX = int.MinValue;
+            int roiMaxY = int.MinValue; 
+            List<int> curs = initPoints.ToList();
+            List<int> nexts = new List<int>();
+            HashSet<int> filled = new HashSet<int>(initPoints);
+            byte* partData = segmentImage.ImageDataPtr;
             while (curs.Count > 0)
             {
-                foreach (Point src in curs)
+                for (int i = 0; i < curs.Count; i++)
                 {
-                    int checkIdx = src.X + src.Y * segmentIter.Bmp.Width;
-
-                    partData[4 * src.X + src.Y * segmentIter.Stride + 0] = c.B;
-                    partData[4 * src.X + src.Y * segmentIter.Stride + 1] = c.G;
-                    partData[4 * src.X + src.Y * segmentIter.Stride + 2] = c.R;
-                    partData[4 * src.X + src.Y * segmentIter.Stride + 3] = 255;
-
-                    Stopwatch sw = Stopwatch.StartNew();
-
-                    List<int> nums = new List<int>();
-
-                    for (int i = 0; i < 78778; i++)
+                    int src = curs[i];
+                    int x, y;
+                    y = Math.DivRem(src, edgeImage.Width, out x);
+                    if (x < roiMinX) roiMinX = x;
+                    if (x > roiMaxX) roiMaxX = x;
+                    if (y < roiMinY) roiMinY = y;
+                    if (y > roiMaxY) roiMaxY = y;
+                    int offset = 4 * x + y * segmentImage.WidthStep;
+                    if (CanFill(src - 1, offset - 4 + 3, x - 1, y, x, y, filled, uncoloredPixels, segmentImage, orgIter, sw2))
                     {
-                        Point[] pts = new[] {
-                        new Point(src.X + 1, src.Y),
-                        new Point(src.X, src.Y + 1),
-                        new Point(src.X - 1, src.Y),
-                        new Point(src.X, src.Y - 1)
-                    };
-                        foreach (var pt in pts)
-                        {
-//                            if (CanFill(pt, src, curs, nexts, uncoloredPixels, segmentIter, edgeIter, orgIter))
-                            {
-                                nexts.Add(pt);
-                            }
-                        }
+                        nexts.Add(src - 1);
+                        filled.Add(src - 1);
                     }
-
-                    Console.Write("sw = " + sw.ElapsedMilliseconds);
-
-                    break;
-/*
-                    foreach (var pt in pts)
+                    if (CanFill(src + 1, offset + 4 + 3, x + 1, y, x, y, filled, uncoloredPixels, segmentImage, orgIter, sw2))
                     {
-                        if (CanFill(pt, src, curs, nexts, uncoloredPixels, segmentIter, edgeIter, orgIter))
-                        {
-                            nexts.Add(pt);
-                        }
+                        nexts.Add(src + 1);
+                        filled.Add(src + 1);
                     }
-  */              }
+                    if (CanFill(src - edgeImage.Width, offset - segmentImage.WidthStep + 3, x, y - 1, x, y, filled, uncoloredPixels, segmentImage, orgIter, sw2))
+                    {
+                        nexts.Add(src - segmentImage.Width);
+                        filled.Add(src - segmentImage.Width);
+                    }
+                    if (CanFill(src + edgeImage.Width, offset + segmentImage.WidthStep + 3, x, y + 1, x, y, filled, uncoloredPixels, segmentImage, orgIter, sw2))
+                    {
+                        nexts.Add(src + segmentImage.Width);
+                        filled.Add(src + segmentImage.Width);
+                    }
+                    partData[offset + 0] = c.B;
+                    partData[offset + 1] = c.G;
+                    partData[offset + 2] = c.R;
+                    partData[offset + 3] = 255;
+                }
                 curs.Clear();
                 FMath.Swap(ref curs, ref nexts);
             }
+
+            return new CvRect(
+                Math.Max(0, roiMinX - 1),
+                Math.Max(0, roiMinY - 1),
+                Math.Min(edgeImage.Width, roiMaxX - roiMinX + 2),
+                Math.Min(edgeImage.Height, roiMaxY - roiMinY + 2));
         }
 
     }

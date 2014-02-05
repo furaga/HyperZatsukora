@@ -87,7 +87,12 @@ namespace FLib
 
         private void canvas_Paint(object sender, PaintEventArgs e)
         {
-
+            e.Graphics.Clear(BackColor);
+            if (Bmp != null)
+            {
+                e.Graphics.Transform = transform;
+                e.Graphics.DrawImage(Bmp, 0, 0, Bmp.Width, Bmp.Height);
+            }
         }
 
         private void canvas_MouseDown(object sender, MouseEventArgs e)
@@ -97,12 +102,12 @@ namespace FLib
             canvas.Invalidate();
         }
 
-        private void canvas_MouseMove(object sender, MouseEventArgs e)
+        public void canvas_MouseMove(object sender, MouseEventArgs e)
         {
 
         }
 
-        private void canvas_MouseUp(object sender, MouseEventArgs e)
+        public void canvas_MouseUp(object sender, MouseEventArgs e)
         {
             dragging = false;
             prevMousePos = e.Location;

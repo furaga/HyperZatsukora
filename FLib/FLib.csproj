@@ -27,10 +27,11 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>..\Bin\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.Xna.Framework, Version=4.0.0.0, Culture=neutral, PublicKeyToken=842cf8be1de50553, processorArchitecture=x86" />
@@ -60,8 +61,20 @@
     <Compile Include="FLib.cs" />
     <Compile Include="FMath.cs" />
     <Compile Include="PriorityQueue.cs" />
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
     <Compile Include="Skeleton\Joint.cs" />
     <Compile Include="Skeleton\Skeleton.cs" />
+    <Compile Include="Sockswitch\SockswitchSensor.cs" />
+    <Compile Include="Sockswitch\SockswitchViewControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Sockswitch\SockswitchViewControl.Designer.cs">
+      <DependentUpon>SockswitchViewControl.cs</DependentUpon>
+    </Compile>
     <Compile Include="XNAControl\XNAControl.cs">
       <SubType>Component</SubType>
     </Compile>
@@ -76,8 +89,22 @@
     <EmbeddedResource Include="DraggablePictureBox.resx">
       <DependentUpon>DraggablePictureBox.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Sockswitch\SockswitchViewControl.resx">
+      <DependentUpon>SockswitchViewControl.cs</DependentUpon>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Resources\planter4uno.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <Content Include="Resources\heatmap.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="TODO.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
