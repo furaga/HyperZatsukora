@@ -17,8 +17,8 @@ namespace FLib
     {
         const float ratio = 1 / 1023f;
 
-        int sensorNum = 0;
-        int sensorNumPerFoot = 0;
+        public int sensorNum = 0;
+        public int sensorNumPerFoot = 0;
 
         SerialPort serialPort;
         List<byte> rawData = new List<byte>();
@@ -221,7 +221,7 @@ namespace FLib
                     break;
                 }
             }
-            timeStamp = frameIdx < timeStamps.Count ? timeStamps[frameIdx] : 0;
+            timeStamp = (0 <= frameIdx && frameIdx < timeStamps.Count) ? timeStamps[frameIdx] : 0;
             return data;
         }
         #endregion
@@ -237,7 +237,7 @@ namespace FLib
                 for (int i = 0; i < sensorNum; i++)
                 {
                     int side = (i < sensorNumPerFoot ? 0 : 1) << 5;
-                    int val = sensorIdx == i ? (int)(force * 0.002f * 1023) : 0;
+                    int val = (sensorIdx == i || sensorIdx - 1 == i) ? (int)(force * 0.002f * 1023) : 0;
                     int high = (val >> 5) & 0x1f;
                     int low = val & 0x1f;
                     byte info = (byte)((0 << 6) | side | (i % sensorNumPerFoot));

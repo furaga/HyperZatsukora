@@ -68,6 +68,7 @@
     </Compile>
     <Compile Include="Skeleton\Joint.cs" />
     <Compile Include="Skeleton\Skeleton.cs" />
+    <Compile Include="Sockswitch\SockswitchNaiveRecognizer.cs" />
     <Compile Include="Sockswitch\SockswitchSensor.cs" />
     <Compile Include="Sockswitch\SockswitchViewControl.cs">
       <SubType>UserControl</SubType>
@@ -100,10 +101,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\planter4uno.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <Content Include="Resources\heatmap.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="TODO.txt" />
   </ItemGroup>

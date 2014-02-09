@@ -25,8 +25,11 @@ namespace FLib
             }
             set
             {
-                planterImage = value;
-                UpdateSensorPositions(planterImage);
+                if (value != null)
+                {
+                    planterImage = value;
+                    UpdateSensorPositions(planterImage);
+                }
             }
         }
 
