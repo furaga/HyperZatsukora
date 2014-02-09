@@ -50,17 +50,17 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BitmapHandler.cs" />
-    <Compile Include="BitmapIterator.cs" />
-    <Compile Include="DraggablePictureBox.cs">
+    <Compile Include="Utils\BitmapHandler.cs" />
+    <Compile Include="Utils\BitmapIterator.cs" />
+    <Compile Include="Utils\DraggablePictureBox.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="DraggablePictureBox.Designer.cs">
+    <Compile Include="Utils\DraggablePictureBox.Designer.cs">
       <DependentUpon>DraggablePictureBox.cs</DependentUpon>
     </Compile>
     <Compile Include="FLib.cs" />
-    <Compile Include="FMath.cs" />
-    <Compile Include="PriorityQueue.cs" />
+    <Compile Include="Utils\FMath.cs" />
+    <Compile Include="Utils\PriorityQueue.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -76,18 +76,18 @@
     <Compile Include="Sockswitch\SockswitchViewControl.Designer.cs">
       <DependentUpon>SockswitchViewControl.cs</DependentUpon>
     </Compile>
-    <Compile Include="XNAControl\XNAControl.cs">
+    <Compile Include="XNA\XNAControl.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Include="XNAControl\XNAService.cs" />
-    <Compile Include="LazyBrush.cs" />
+    <Compile Include="XNA\XNAService.cs" />
+    <Compile Include="Animator\LazyBrush.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="XNAControl\XNAServiceContainer.cs" />
-    <Compile Include="TrappedBallSegmentation.cs" />
-    <Compile Include="XNATexture.cs" />
+    <Compile Include="XNA\XNAServiceContainer.cs" />
+    <Compile Include="Animator\TrappedBallSegmentation.cs" />
+    <Compile Include="XNA\XNATexture.cs" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="DraggablePictureBox.resx">
+    <EmbeddedResource Include="Utils\DraggablePictureBox.resx">
       <DependentUpon>DraggablePictureBox.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
