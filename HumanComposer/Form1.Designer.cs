@@ -36,7 +36,7 @@
             this.openOToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.saveSToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.partsList = new System.Windows.Forms.ImageList(this.components);
-            this.xnaCanvas1 = new HumanComposer.XNACanvas();
+            this.xnaCanvas1 = new HumanComposer.HumanComposerCanvas();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).BeginInit();
             this.splitContainer1.Panel1.SuspendLayout();
             this.splitContainer1.Panel2.SuspendLayout();
@@ -150,7 +150,7 @@
         private System.Windows.Forms.ToolStripMenuItem openOToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem saveSToolStripMenuItem;
         private System.Windows.Forms.ImageList partsList;
-        private XNACanvas xnaCanvas1;
+        private HumanComposerCanvas xnaCanvas1;
     }
 }
 

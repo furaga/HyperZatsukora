@@ -9,7 +9,7 @@ using FLib;
 
 namespace HumanComposer
 {
-    public partial class XNACanvas : XNAControl
+    public partial class HumanComposerCanvas : XNAControl
     {
         SpriteBatch spriteBatch;
         Texture2D Texture = null;
@@ -23,8 +23,7 @@ namespace HumanComposer
             XNATexture.Load(GraphicsDevice, "dummy.png", out Texture, out texData);
 
             // スケルトンを作成
-
-
+            
 
             skeleton = new Skeleton(null);
         }
@@ -33,7 +32,8 @@ namespace HumanComposer
         {
             GraphicsDevice.Clear(Color.CornflowerBlue);
             spriteBatch.Begin();
-            spriteBatch.Draw(Texture, new Rectangle(0, 0, Width, Height), Color.White);
+            skeleton.Draw(GraphicsDevice);
+//            spriteBatch.Draw(Texture, new Rectangle(0, 0, Width, Height), Color.White);
             spriteBatch.End();
         }
     }

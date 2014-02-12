@@ -77,7 +77,7 @@ namespace FLib
             }
             catch (Exception ex)
             {
-
+                MessageBox.Show(ex + ":" + ex.StackTrace);
             }
         }
 
@@ -123,7 +123,7 @@ namespace FLib
             }
             catch (Exception ex)
             {
-
+                MessageBox.Show(ex + ":" + ex.StackTrace);
             }
         }
 

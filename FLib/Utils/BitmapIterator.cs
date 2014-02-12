@@ -30,22 +30,25 @@ namespace FLib
     /// }
     /// </summary>
 
-    public class BitmapIterator : IDisposable
+    unsafe public class BitmapIterator : IDisposable
     {
         BitmapData lck;
         Bitmap bmp;
         int stride = 0;
         IntPtr pixelData;
+        byte* data;
 
         public Bitmap Bmp { get { return bmp; } }
         public int Stride { get { return stride; } }
         public IntPtr PixelData { get { return pixelData; } }
+        public byte* Data { get { return data; } }
 
         public BitmapIterator(Bitmap bmp, ImageLockMode lockMode, PixelFormat pixelFormat)
         {
             this.bmp = bmp;
             lck = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), lockMode, pixelFormat);
             pixelData = lck.Scan0;
+            data = (byte*)pixelData;
             stride = lck.Width *
                 (pixelFormat == PixelFormat.Format32bppArgb ? 4 :
                  pixelFormat == PixelFormat.Format32bppPArgb ? 4 :
