@@ -52,8 +52,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="SketchTyping\SketchTypeCommand.cs" />
-    <Compile Include="SketchTyping\SketchTyping.cs" />
     <Compile Include="UI\TemplateMatching.cs" />
     <Compile Include="UI\UI.cs" />
     <Compile Include="Utils\BitmapHandler.cs" />
@@ -113,6 +111,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="TODO.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="SketchTyping\" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

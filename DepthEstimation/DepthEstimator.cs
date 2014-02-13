@@ -48,8 +48,10 @@ namespace DepthEstimation
                     Lab = BitmapConverter.ToBitmap(lab);
                     Edge = BitmapConverter.ToBitmap(edge);
                 }
+
             }
         }
+
 
         #endregion
 
