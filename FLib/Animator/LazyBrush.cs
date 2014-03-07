@@ -16,6 +16,8 @@ namespace FLib
     /// edgeBmpは輪郭線が黒いモノクロ画像
     /// preBrushBmpはユーザが指定したストロークが塗られたビットマップ
     /// </summary>
+    /// 
+    /// AnnotationSketch:BNn_LfXCEAEHBzr.png
     public class LazyBrush : IDisposable
     {
         [DllImport("LBGraphCut.dll")]
@@ -100,7 +102,7 @@ namespace FLib
                         int intIdx = x + y * intIter.Stride;
                         data[idx] =
                              labelMap[idx];
-//                            intData[intIdx] >= 10 ? intData[intIdx] : labelMap[idx];
+                        //                            intData[intIdx] >= 10 ? intData[intIdx] : labelMap[idx];
                     }
                 }
             }

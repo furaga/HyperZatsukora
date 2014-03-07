@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LBGraphCut", "LBGraphCut\LB
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HumanComposer", "HumanComposer\HumanComposer.csproj", "{3AF2C6C6-F046-4EC1-B1AE-AEB575B32166}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CutAndPaste", "CutAndPaste\CutAndPaste.csproj", "{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,18 @@ Global
 		{3AF2C6C6-F046-4EC1-B1AE-AEB575B32166}.Release|Win32.ActiveCfg = Release|x86
 		{3AF2C6C6-F046-4EC1-B1AE-AEB575B32166}.Release|x86.ActiveCfg = Release|x86
 		{3AF2C6C6-F046-4EC1-B1AE-AEB575B32166}.Release|x86.Build.0 = Release|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Debug|Win32.ActiveCfg = Debug|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Debug|x86.ActiveCfg = Debug|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Debug|x86.Build.0 = Debug|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Release|Any CPU.ActiveCfg = Release|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Release|Mixed Platforms.ActiveCfg = Release|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Release|Mixed Platforms.Build.0 = Release|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Release|Win32.ActiveCfg = Release|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Release|x86.ActiveCfg = Release|x86
+		{2E7B9A33-A4FE-4A2F-BF11-ED8772CB15DA}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

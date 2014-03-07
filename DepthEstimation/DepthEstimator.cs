@@ -25,6 +25,7 @@ namespace DepthEstimation
 
         #region エッジ抽出
 
+        /// AnnotationSketch:e9254d0c-bae1-4e59-ae0e-1f4512a01e77.txt
         unsafe public void Edging()
         {
             if (Input == null) return;
@@ -57,6 +58,8 @@ namespace DepthEstimation
 
         #region 領域抽出
 
+
+        /// AnnotationSketch:3740daf6-f213-499b-b438-784864a52a09.txt
         public void Regions()
         {
             if (Input == null) return;
@@ -65,14 +68,13 @@ namespace DepthEstimation
 
             // パッチ分割
             Patch[] patches = GetPatches();
-            DrawPatches(patches, randColors);
+     //       DrawPatches(patches, randColors);
 
             // 明らかに同じ領域のパッチを統合
-            AggregatePatches(patches);
-            DrawAggregatedPatches(patches, randColors);
+  //          AggregatePatches(patches);
+   //         DrawAggregatedPatches(patches, randColors);
 
 
-            // LazyBrushで残りの領域を塗りつぶす
             System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
             using (TrappedBallSegmentation tb = new TrappedBallSegmentation(Lab, Edge))
             {
@@ -115,6 +117,9 @@ namespace DepthEstimation
             HashSet<Patch> uncheck = new HashSet<Patch>(patches.Where(p => p != null).ToArray());
             while (uncheck.Count > 0) FloodFill(uncheck, patches, row, col);
         }
+
+
+        /// AnnotationSketch:8e3e5ed6-d08d-4c00-b05b-aa5c4f98508f.txt
         void FloodFill(HashSet<Patch> uncolored, Patch[] patches, int row, int col)
         {
             int id = uncolored.First().id;
@@ -134,8 +139,8 @@ namespace DepthEstimation
                         {
                             if (pdx == 0 && pdy == 0) continue;
                             // TODO?
-                            if (pdx * pdy != 0) continue; 
-                            
+                            if (pdx * pdy != 0) continue;
+
                             int px = src.px + pdx;
                             int py = src.py + pdy;
                             if (px < 0 || row <= px) continue;
@@ -145,7 +150,7 @@ namespace DepthEstimation
                             if (uncolored.Contains(dst))
                             {
                                 float dist = FMath.MahalanobisDistance(src.pixels, dst.pixels);
-                              //  Console.WriteLine(dist);
+                                //  Console.WriteLine(dist);
                                 if (dist < 20)
                                 {
                                     nexts.Add(dst);
@@ -176,6 +181,7 @@ namespace DepthEstimation
 
         #endregion
 
+        /// AnnotationSketch:388191ff-3526-49ad-8bb3-a441d5ca13b1.txt
         public void TJunctions()
         {
 
@@ -192,7 +198,7 @@ namespace DepthEstimation
         }
 
         #region 途中結果の出力
-   
+
         void DrawPatches(Patch[] patches, Dictionary<int, Color> randColors)
         {
             int row = Lab.Width / Patch.Size;
@@ -258,7 +264,7 @@ namespace DepthEstimation
         #endregion
 
         #region 保存
- 
+
         public void Save(string dir)
         {
             foreach (var path in System.IO.Directory.GetFiles(dir)) System.IO.File.Delete(path);

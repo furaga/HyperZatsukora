@@ -110,10 +110,25 @@ namespace FLib
                             rPinTovPin = line.Split(' ').Select(s => int.Parse(s)).ToList();
                             break;
                         case "end":
+                            if (pressureData.Count >= sensorNum)
+                            {
+                                float max = pressureData.Max();
+                                for (int i = sensorNum; i < pressureData.Count; i++)
+                                {
+                                    pressureData[i] /= max;
+                                }
+                                float[] prevs = pressureData.Take(sensorNum).ToArray();
+                                for (int i = sensorNum; i < pressureData.Count; i++)
+                                {
+                                    if (pressureData[i] < 0) pressureData[i] = prevs[i % sensorNum];
+                                    else prevs[i % sensorNum] = pressureData[i];
+                                }
+                            }
                             OnUpdate();
                             return;
                     }
                 }
+
             }
             catch (Exception e)
             {
@@ -179,7 +194,7 @@ namespace FLib
                 {
                     int type = (data[i] >> 6) & 0x3;
                     int side = (data[i] >> 5) & 0x1;
-                    int sensorIdx;
+                    int sensorIdx = 0;
                     int highBits, lowBits;
                     switch (type)
                     {
@@ -198,6 +213,7 @@ namespace FLib
                             lowBits = tmpLowData[sensorIdx];
                             float pressure = ((highBits << 5) | lowBits) * ratio;
                             int targetIdx = FrameCount * sensorNum + sensorIdx;
+                            while (pressureData.Count > targetIdx) targetIdx += sensorNum;
                             while (pressureData.Count < targetIdx) pressureData.Add(-1);
                             pressureData.Add(pressure);
                             break;
@@ -224,11 +240,31 @@ namespace FLib
             timeStamp = (0 <= frameIdx && frameIdx < timeStamps.Count) ? timeStamps[frameIdx] : 0;
             return data;
         }
+        public List<double>[] GetPressureDataRange(int start, int end)
+        {
+            long timeStamp;
+            List<double>[] raw_waves = new List<double>[sensorNum];
+            for (int j = 0; j < raw_waves.Length; j++)
+            {
+                raw_waves[j] = new List<double>();
+            }
+            for (int i = start; i <= end; i++)
+            {
+                var data = GetPressureData(i, out timeStamp);
+                for (int j = 0; j < raw_waves.Length; j++)
+                {
+                    raw_waves[j].Add(data[j]);
+                }
+            }
+            return raw_waves;
+        }
+
         #endregion
 
         #region シリアル通信
         void SerialRead(byte[] data, int offset, int count)
         {
+            // ダミーモード
             if (dummySerialMode)
             {
                 int sensorIdx = (int)((serialStopwatch.ElapsedMilliseconds / 500) % sensorNum);
