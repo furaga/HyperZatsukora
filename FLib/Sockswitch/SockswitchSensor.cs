@@ -112,10 +112,12 @@ namespace FLib
                         case "end":
                             if (pressureData.Count >= sensorNum)
                             {
-                                float max = pressureData.Max();
-                                for (int i = sensorNum; i < pressureData.Count; i++)
+                                float[] max = new float[sensorNum];
+                                for (int i = 0; i < max.Length; i++)
+                                    max[i] = Math.Max(0.1f, pressureData.Where((_, idx) => idx % sensorNum == i).Max());
+                                for (int i = 0; i < pressureData.Count; i++)
                                 {
-                                    pressureData[i] /= max;
+                                    pressureData[i] /= max[i % sensorNum];
                                 }
                                 float[] prevs = pressureData.Take(sensorNum).ToArray();
                                 for (int i = sensorNum; i < pressureData.Count; i++)
@@ -171,12 +173,32 @@ namespace FLib
                 for (int i = 0; i < tmpLowData.Length; i++) tmpLowData[i] = -1;
                 for (int i = 0; i < sensorNum; i++) rPinTovPin.Add(i);
                 this.OnUpdate = OnUpdate;
+                max = new float[] {
+                    0.1f,
+                    0.1485826f,
+                    0.3059629f,
+                    0.1788856f,
+                    0.1f,
+                    0.1661779f,
+                    0.2199413f,
+                    0.228739f,
+                    0.1681329f,
+                    0.1446725f,
+                    0.18896608f,
+                    0.1339198f,
+                    0.1339198f,
+                    0.3499511f,
+                    0.1505376f,
+                    0.3450635f,
+                }.Take(sensorNum).ToArray();
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message + ":" + ex.StackTrace);
             }
         }
+
+        float[] max;
         #endregion
 
         #region 生のシリアルデータから圧力データを復元・各フレームにおける圧力データの取得
@@ -214,8 +236,14 @@ namespace FLib
                             float pressure = ((highBits << 5) | lowBits) * ratio;
                             int targetIdx = FrameCount * sensorNum + sensorIdx;
                             while (pressureData.Count > targetIdx) targetIdx += sensorNum;
-                            while (pressureData.Count < targetIdx) pressureData.Add(-1);
-                            pressureData.Add(pressure);
+                            while (pressureData.Count < targetIdx)
+                            {
+                                pressureData.Add(pressureData.Count >= sensorNum ? pressureData[pressureData.Count - sensorNum] : 0);
+                            }
+                            if (pressure >= 0)
+                                pressureData.Add(pressure / max[targetIdx % sensorNum]);
+                            else
+                                pressureData.Add(pressureData.Count >= 1 ? pressureData.Last() : 0);
                             break;
                     }
                 }
@@ -242,6 +270,8 @@ namespace FLib
         }
         public List<double>[] GetPressureDataRange(int start, int end)
         {
+            if (start < 0 || end < 0 || start > end) return null;
+
             long timeStamp;
             List<double>[] raw_waves = new List<double>[sensorNum];
             for (int j = 0; j < raw_waves.Length; j++)
@@ -262,28 +292,92 @@ namespace FLib
         #endregion
 
         #region シリアル通信
+        int t_sensorNumPerFoot;
+        int t_sensorNum;
+        List<byte> t_rawData;
+        List<long> t_timeStamps;
+        List<float> t_pressureData;
+        int t_sentCnt = 0;
+
         void SerialRead(byte[] data, int offset, int count)
         {
             // ダミーモード
             if (dummySerialMode)
             {
-                int sensorIdx = (int)((serialStopwatch.ElapsedMilliseconds / 500) % sensorNum);
-                int force = (int)serialStopwatch.ElapsedMilliseconds % 500;
-                int dataIdx = 0;
-                for (int i = 0; i < sensorNum; i++)
+                try
                 {
-                    int side = (i < sensorNumPerFoot ? 0 : 1) << 5;
-                    int val = (sensorIdx == i || sensorIdx - 1 == i) ? (int)(force * 0.002f * 1023) : 0;
-                    int high = (val >> 5) & 0x1f;
-                    int low = val & 0x1f;
-                    byte info = (byte)((0 << 6) | side | (i % sensorNumPerFoot));
-                    byte lowValue = (byte)((1 << 6) | side | low);
-                    byte highValue = (byte)((2 << 6) | side | high);
-                    data[dataIdx++] = info;
-                    data[dataIdx++] = lowValue;
-                    data[dataIdx++] = highValue;
+                    if (t_rawData == null)
+                    {
+                        System.IO.StringReader sr = new System.IO.StringReader(System.IO.File.ReadAllText("../../../../../pressureData/201403032221_heeltap.txt"));
+                        while (true)
+                        {
+                            string line = sr.ReadLine();
+                            switch (line.Trim().Trim('\n', '\r', ':'))
+                            {
+                                case "sensorNumPerFoot":
+                                    line = sr.ReadLine().Trim();
+                                    t_sensorNumPerFoot = int.Parse(line);
+                                    t_sensorNum = sensorNumPerFoot * 2;
+                                    break;
+                                case "rawData":
+                                    line = sr.ReadLine().Trim();
+                                    t_rawData = line.Split(' ').Select(s => byte.Parse(s)).ToList();
+                                    break;
+                                case "timeStamps":
+                                    line = sr.ReadLine().Trim();
+                                    t_timeStamps = line.Split(' ').Select(s => long.Parse(s)).ToList();
+                                    break;
+                                case "rPinTovPin":
+                                    line = sr.ReadLine().Trim();
+                                    break;
+                                case "pressureData":
+                                    line = sr.ReadLine().Trim();
+                                    t_pressureData = line.Split(' ').Select(s => float.Parse(s)).ToList();
+                                    break;
+                                case "end":
+                                    return;
+                            }
+                        }
+                    }
+
+//                    for (int i = 0; i < max.Length; i++)
+  //                      max[i] = Math.Max(0.1f, t_pressureData.Where((_, idx) => idx % sensorNum == i).Max());
                 }
-                data[dataIdx++] = (byte)0xff;
+                catch (Exception e)
+                {
+                    MessageBox.Show(e.ToString() + ":" + e.StackTrace);
+                }
+
+
+                if (t_rawData != null)
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        data[i] = t_rawData[t_sentCnt];
+                        t_sentCnt++;
+                        if (t_sentCnt >= t_rawData.Count) t_sentCnt = 0;
+                    }
+                }
+                else
+                {
+                    int sensorIdx = (int)((serialStopwatch.ElapsedMilliseconds / 500) % sensorNum);
+                    int force = (int)serialStopwatch.ElapsedMilliseconds % 500;
+                    int dataIdx = 0;
+                    for (int i = 0; i < sensorNum; i++)
+                    {
+                        int side = (i < sensorNumPerFoot ? 0 : 1) << 5;
+                        int val = (sensorIdx == i || sensorIdx - 1 == i) ? (int)(force * 0.002f * 1023) : 0;
+                        int high = (val >> 5) & 0x1f;
+                        int low = val & 0x1f;
+                        byte info = (byte)((0 << 6) | side | (i % sensorNumPerFoot));
+                        byte lowValue = (byte)((1 << 6) | side | low);
+                        byte highValue = (byte)((2 << 6) | side | high);
+                        data[dataIdx++] = info;
+                        data[dataIdx++] = lowValue;
+                        data[dataIdx++] = highValue;
+                    }
+                    data[dataIdx++] = (byte)0xff;
+                }
             }
             else
             {

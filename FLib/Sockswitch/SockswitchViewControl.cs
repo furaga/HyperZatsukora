@@ -113,33 +113,27 @@ namespace FLib
         SockswitchSensor sensor;
         public enum RenderMode
         {
-            Planter, RawSensor, Mean, Div, MeanDiv, Window,
+            Planter, RawSensor, Baseline, Window,
         }
-        RenderMode renderMode = RenderMode.Planter;
-        List<double[]> baselines = null;
-        List<double>[] normalized_waves= null;
 
-        public void UpdateSensorForces(SockswitchSensor sensor, int frameIdx, RenderMode renderMode = RenderMode.Planter)
+        RenderMode renderMode = RenderMode.Planter;
+        float threshold = 0.3f;
+
+        public void UpdateWindow(SockswitchSensor sensor, SockswitchSVM svm = null)
+        {
+            var raw_waves = sensor.GetPressureDataRange(0, sensor.FrameCount - 1);
+            for (int i = 0; i < raw_waves[0].Count; i++)
+            {
+                svm.Baselines(raw_waves, i, 5, 0.1);
+                svm.Window(raw_waves, svm.baselines, i, 10, 4);
+            }
+        }
+
+        SockswitchSVM svm;
+
+        public void UpdateSensorForces(SockswitchSensor sensor, int frameIdx, RenderMode renderMode = RenderMode.Planter, SockswitchSVM svm = null)
         {
             if (sensor == null) return;
-
-            if (sensor != this.sensor)
-            {
-                var raw_waves = sensor.GetPressureDataRange(0, sensor.FrameCount - 1);
-                baselines = SockswitchSVM.Baselines(raw_waves, 5, 0.03);
-                normalized_waves = new List<double>[raw_waves.Length];
-                for (int j = 0; j < baselines[0].Length; j++)
-                {
-                    normalized_waves[j] = new List<double>();
-                }
-                for (int i = 0; i < baselines.Count; i++)
-                {
-                    for (int j = 0; j < baselines[i].Length; j++)
-                    {
-                        normalized_waves[j].Add(raw_waves[j][i] - baselines[i][j]);
-                    }
-                }
-            }
 
             long timeStamp;
             float[] data = sensor.GetPressureData(frameIdx, out timeStamp);
@@ -155,6 +149,7 @@ namespace FLib
             this.sensor = sensor;
             this.frameIdx = frameIdx;
             this.renderMode = renderMode;
+            this.svm = svm;
 
             pictureBox2.Invalidate();
         }
@@ -218,6 +213,7 @@ namespace FLib
             var sw = Stopwatch.StartNew();
 
             if (sensor == null) return;
+            if (svm == null) return;
 
             //            float ratio = (float)pictureBox2.Height / planterImage.Height;
             float w = pictureBox2.Width * graphRatio.X;
@@ -229,7 +225,6 @@ namespace FLib
             for (int i = 0; i < graph.Length; i++) graph[i] = new List<Point>();
 
             const int span = 100;
-            long ot = -1;
             var raw_waves = sensor.GetPressureDataRange(Math.Max(0, frameIdx - span), Math.Min(sensor.FrameCount - 1, frameIdx));
             switch (renderMode)
             {
@@ -244,17 +239,16 @@ namespace FLib
                     break;
                 case RenderMode.Window:
                     // SVMの窓関数
-                    // TODO
-                    var window = SockswitchSVM.Window(normalized_waves, 10, 4);
-                    for (int j = 0; j < raw_waves[0].Count; j++)
+                    for (int j = 0; j < raw_waves[0].Count - 1; j++)
                     {
-                        int idx = Math.Max(0, frameIdx - span + j);
-                        if (idx < window.Count)
+                        int idx = frameIdx - span + j;
+                        var pt = new Point((int)(w * j / (float)raw_waves[0].Count), 0);
+                        if (0 <= idx && idx < svm.window.Count)
                         {
-                            var pt = new Point((int)(w * (10 + j) / (double)window.Count), (int)(h - h / 8 * window[idx]));
-                            graph[0].Add(pt);
-                            graph[8].Add(pt);
+                            pt.Y = (int)(h - h * svm.window[idx]);
                         }
+                        graph[0].Add(pt);
+                        graph[8].Add(pt);
                     }
                     break;
                 default:
@@ -262,15 +256,13 @@ namespace FLib
                     {
                         for (int j = 0; j < raw_waves[i].Count; j++)
                         {
-                            double val = Math.Abs(normalized_waves[i][Math.Max(0, frameIdx - span) + j]);
-                            graph[i].Add(new Point((int)(w * j / (double)raw_waves[i].Count), (int)(h - h * val)));
-                        }
-                    }
-                    for (int i = 0; i < raw_waves.Length; i++)
-                    {
-                        for (int j = 0; j < raw_waves[i].Count; j++)
-                        {
-//                            graph[i].Add(new Point((int)(w * j / (double)raw_waves[i].Count), (int)(h - h * baselines[Math.Max(0, frameIdx - span) + j][i])));
+                            int idx = frameIdx - span + j;
+                            var pt = new Point((int)(w * j / (float)raw_waves[0].Count), 0);
+                            if (0 <= idx && idx < svm.window.Count)
+                            {
+                                pt.Y = (int)(h - h * svm.baselines[idx][i]);
+                            }
+                            graph[i].Add(pt);
                         }
                     }
                     break;
@@ -284,6 +276,16 @@ namespace FLib
                 int idx1 = (selectionEnd <= -1 ? selectionStart + 1 : selectionEnd) - (frameIdx - graph[8].Count);
                 int x0 = graph[8][Math.Max(0, Math.Min(graph[8].Count - 1, idx0))].X;
                 int x1 = graph[8][Math.Max(0, Math.Min(graph[8].Count - 1, idx1))].X;
+                g.FillRectangle(new SolidBrush(Color.FromArgb(100, 255, 0, 0)), new Rectangle(x0, 0, x1 - x0, (int)h));
+            }
+            for (int i = 0; i < svm.windowRanges.Count; i++)
+            {
+                int start = svm.windowRanges[i].First - 10;
+                int end = svm.windowRanges[i].First + svm.windowRanges[i].Length + 10;
+                int idx0 = start - (frameIdx - graph[8].Count);
+                int idx1 = (end <= -1 ? start + 1 : end) - (frameIdx - graph[8].Count);
+                int x0 = graph[8][Math.Max(0, Math.Min(graph[8].Count - 1, idx0))].X;
+                int x1 = graph[8][Math.Max(0, Math.Min(graph[8].Count - 1, idx1))].X;
                 g.FillRectangle(new SolidBrush(Color.FromArgb(100, 255, 255, 255)), new Rectangle(x0, 0, x1 - x0, (int)h));
             }
             for (int i = 8; i < graph.Length; i++)
@@ -294,8 +296,8 @@ namespace FLib
                 }
             }
             g.DrawLine(new Pen(Brushes.Yellow),
-                new Point(0, (int)(h * 8 * Baseline)),
-                new Point(pictureBox2.Width, (int)(h * 8 * Baseline)));
+                new Point(0, (int)(h - h * Baseline)),
+                new Point(pictureBox2.Width, (int)(h - h * Baseline)));
 
             //            Console.WriteLine("draw: " + sw.ElapsedMilliseconds + " ms");
             //          sw.Restart();
@@ -396,9 +398,32 @@ namespace FLib
                         {
                             selectionStart = selectionEnd = -1;
                         }
+                        Parent.Text = "[" + selectionStart + "," + selectionEnd + "]";
                     }
                 }
                 pictureBox2.Invalidate();
+            }
+            if (e.Button == System.Windows.Forms.MouseButtons.Right && svm != null)
+            {
+                int x = e.Location.X;
+                for (int i = 0; i < svm.windowRanges.Count; i++)
+                {
+                    int idx0 = svm.windowRanges[i].First - 10 - (frameIdx - graph[8].Count);
+                    int idx1 = svm.windowRanges[i].First + svm.windowRanges[i].Length + 10 - (frameIdx - graph[8].Count);
+                    if (0 <= idx0 && idx1 < graph[8].Count)
+                    {
+                        int left = graph[8][idx0].X;
+                        int right = graph[8][idx1].X;
+                        if (left <= x && x <= right)
+                        {
+                            selectionStart = svm.windowRanges[i].First - 10;
+                            selectionEnd = svm.windowRanges[i].First + svm.windowRanges[i].Length + 10;
+                            Parent.Text = "[" + selectionStart + "," + selectionEnd + "]";
+                            pictureBox2.Invalidate();
+                            break;
+                        }
+                    }
+                }
             }
         }
        public int selectionStart = -1;

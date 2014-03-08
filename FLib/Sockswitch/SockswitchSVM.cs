@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using libsvm;
 using ILNumerics;
-
+using System.Drawing;
 namespace FLib
 {
     public class SockswitchSVM
@@ -62,80 +62,120 @@ namespace FLib
                     value = val,
                 };
             }
-
             return sx;
         }
 
-        public static List<double[]> Baselines(List<double>[] raw_waves, int smooth, double threshold)
+        int[] baseline_cnts;
+        Queue<double>[] baseline_totals;
+        double[] baseline_prevs;
+        public List<double[]> baselines = new List<double[]>();
+
+        public double[] Baselines(List<double>[] raw_waves, int frameIndex, int smooth, double threshold)
         {
-            List<double[]> baselines = new List<double[]>();
-            int[] cnts = new int[raw_waves.Length];
-            double[] prevs = new double[raw_waves.Length];
-            double[] total = new double[raw_waves.Length];
-            for (int i = 0; i < cnts.Length; i++)
+            double[] baseline = new double[raw_waves.Length];
+            if (baseline_cnts == null)
             {
-                cnts[i] = smooth;
+                baseline_cnts = new int[raw_waves.Length];
+                baseline_totals = new Queue<double>[raw_waves.Length];
+                for (int i = 0; i < baseline_totals.Length; i++) baseline_totals[i] = new Queue<double>();
+                baseline_prevs = new double[raw_waves.Length];
             }
-            for (int fIdx = 0; fIdx < raw_waves.First().Count; fIdx++)
+            for (int sIdx = 0; sIdx < raw_waves.Length; sIdx++)
             {
-                baselines.Add(new double[raw_waves.Length]);
-                for (int sIdx = 0; sIdx < raw_waves.Length; sIdx++)
+                double val = raw_waves[sIdx][frameIndex];
+                double diff = Math.Abs(baseline_prevs[sIdx] - val);
+                if (diff >= threshold)
                 {
-                    double val = raw_waves[sIdx][fIdx];
-                    double diff = Math.Abs(prevs[sIdx] - val);
                     // 圧力が変化したら
-                    if (diff >= threshold)
-                    {
-                        cnts[sIdx] = smooth;
-                        total[sIdx] = 0;
-                    }
-                    else
-                    {
-                        cnts[sIdx]--;
-                        total[sIdx] += val;
-                    }
-                    // 圧力が一定時間変化しなかったらベースラインを更新
-                    if (cnts[sIdx] <= 0)
-                    {
-                        double t = 0;
-                        for (int i = 0; i < smooth; i++)
-                        {
-                            t += raw_waves[sIdx][fIdx + i - smooth];
-                        }
-                        baselines[fIdx][sIdx] = t / smooth;// total[sIdx] / smooth;
-                    }
-                    else if (fIdx >= 1)
-                    {
-                        baselines[fIdx][sIdx] = baselines[fIdx - 1][sIdx];
-                    }
-                    prevs[sIdx] = val;
+                    baseline_cnts[sIdx] = smooth;
+                    baseline_totals[sIdx].Clear();
                 }
+                else
+                {
+                    baseline_cnts[sIdx]--;
+                    baseline_totals[sIdx].Enqueue(val);
+                    while (baseline_totals[sIdx].Count > smooth) baseline_totals[sIdx].Dequeue();
+                }
+                // 圧力が一定時間変化しなかったらベースラインを更新
+                if (baseline_cnts[sIdx] <= 0)
+                {
+                    baseline[sIdx] = baseline_totals[sIdx].Average();
+                }
+                baseline_prevs[sIdx] = val;
             }
-            return baselines;
+
+            baselines.Add(baseline);
+
+            return baseline;
         }
 
-        public static List<double> Window(List<double>[] normalized_waves, int smooth, double powK)
+        Queue<double>[] window_totals;
+        public List<double> window = new List<double>();
+        public List<CharacterRange> windowRanges = new List<CharacterRange>();
+
+        public double Window(List<double>[] raw_waves, List<double[]> baselines, int frameIndex, int smooth, double powK, double threshold = 0.3)
         {
-            List<double> window_waves = new List<double>();
-            int rem = normalized_waves.First().Count % smooth;
-            int cnt = normalized_waves.First().Count / smooth;
-            for (int offset = smooth; offset < normalized_waves.First().Count; offset++)
+            if (window_totals == null)
             {
-                window_waves.Add(0);
-                for (int sIdx = 0; sIdx < normalized_waves.Length; sIdx++)
-                {
-                    double total = 0;
-                    for (int k = 0; k < smooth; k++)
-                    {
-                        total += normalized_waves[sIdx][offset - k];
-                    }
-                    double average = Math.Abs(total / smooth);
-                    double pow = Math.Exp(powK * average) - 1;
-                    window_waves[window_waves.Count - 1] += pow;
-                }
-                window_waves[window_waves.Count - 1] /= normalized_waves.Length;
+                window_totals = new Queue<double>[raw_waves.Length];
+                for (int i = 0; i < window_totals.Length; i++) window_totals[i] = new Queue<double>();
             }
-            return window_waves;
+            for (int i = 0; i < raw_waves.Length; i++)
+            {
+                window_totals[i].Enqueue(raw_waves[i][frameIndex] - baselines[frameIndex][i]);
+                while (window_totals[i].Count > smooth) window_totals[i].Dequeue();
+            }
+            double val = 0;
+            for (int i = 0; i < window_totals.Length; i++)
+            {
+                double average = Math.Abs(window_totals[i].Average());
+                val += Math.Exp(powK * average) - 1;
+            }
+            val /= window_totals.Length;
+            window.Add(val);
+
+            if (window.Count >= 2)
+            {
+                int idx = window.Count - 1;
+                if (window[idx - 1] < threshold && threshold <= window[idx])
+                {
+                    windowRanges.Add(new CharacterRange( idx, 1));
+                }
+                if (window[idx - 1] >= threshold && threshold > window[idx] && windowRanges.Count >= 1)
+                {
+                    var range = windowRanges.Last();
+                    range.Length = idx - range.First;
+                    windowRanges[windowRanges.Count - 1] = range;
+                }
+            }
+            return val;
+        }
+
+        CharacterRange prevRange;
+        public bool CanRecognize(int margin, out CharacterRange range)
+        {
+            range = new CharacterRange(0, 0);
+            if (windowRanges.Count <= 1)
+            {
+                return false;
+            }
+            int start = (windowRanges.Last().First + windowRanges.Last().Length);
+            int end = window.Count - 1;
+            if (windowRanges.Last() != prevRange && end - start >= margin)
+            {
+                start = windowRanges.Last().First - margin;
+                for (int i = windowRanges.Count - 2; i >= 0; i--)
+                {
+                    int s= windowRanges[i].First - margin;
+                    int e = windowRanges[i].First + windowRanges[i].Length + margin;
+                    if (start <= e) start = s;
+                }
+                range.First = start;
+                range.Length = end - start;
+                prevRange = windowRanges.Last();
+                return true;
+            }
+            return false;
         }
 
         // TODO
