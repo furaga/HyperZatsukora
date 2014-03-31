@@ -10,13 +10,55 @@ using System.Diagnostics;
 
 namespace FLib
 {
+    /// <summary>
+    /// センサーのデータを可視化する。足裏の画像に圧力分布を重ねるかセンサデータの時系列データをグラフで表示
+    /// </summary>
     public partial class SockswitchViewControl : UserControl
     {
-        public List<Point> SensorPositions = new List<Point>();
-        public List<float> SensorForces = new List<float>();
+        public enum RenderMode
+        {
+            Planter, RawSensor, Baseline, Window,
+            Diff,
+        }
+
+        // センサ
+        SockswitchSensor sensor;
+
+        // 圧力
+        public List<float> sensorForces = new List<float>();
+        public List<Point> sensorPositions = new List<Point>();
+        public List<int> sensorTopin = new List<int>();
+        
+        // 可視化モード
+        RenderMode renderMode = RenderMode.Planter;
+        
+        // 足裏モード
         Bitmap planterImage;
         Bitmap heatMap;
-        public List<int> sensorTopin = new List<int>();
+        
+        // 時系列モード
+        List<Point>[] timeline = null;
+        bool[] filter; // 各センサのデータを表示するか
+        Brush[] sensorDataBrushes = new Brush[] {
+            Brushes.Red,
+            Brushes.Yellow,
+            Brushes.Orange,
+            Brushes.Green,
+            Brushes.Cyan,
+            Brushes.Blue,
+            Brushes.SkyBlue,
+            Brushes.White,
+        };
+        
+        // 表示位置
+        int currentFrameIdx = 0;
+        
+        // 選択位置
+        public int selectionStart = -1;
+        public int selectionEnd = -1;
+        
+        // SVM
+        SockswitchSVM svm;
 
         public Bitmap PlanterImage
         {
@@ -27,21 +69,21 @@ namespace FLib
             set
             {
                 if (value != null) planterImage = value;
-
             }
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
         public SockswitchViewControl()
         {
             InitializeComponent();
             try
             {
-                MouseWheel += new MouseEventHandler(SockswitchViewControl_MouseWheel);
-
-                //                PlanterImage = new Bitmap("Resources/planter4uno.png");
+                // PlanterImage = new Bitmap("Resources/planter4uno.png");
                 PlanterImage = new Bitmap("Resources/planter4fio.png");
                 heatMap = new Bitmap("Resources/heatmap.png");
-                pictureBox2.Invalidate();
+                canvas.Invalidate();
             }
             catch (Exception ex)
             {
@@ -49,26 +91,13 @@ namespace FLib
             }
         }
 
-        PointF graphRatio = new Point(1, 1);
-
-        void SockswitchViewControl_MouseWheel(object sender, MouseEventArgs e)
-        {
-            int sign = e.Delta > 0 ? 1 : -1;
-            graphRatio.X += 0.1f * sign;
-            graphRatio.Y += 0.1f * sign;
-            pictureBox2.Invalidate();
-        }
-
-        private void SockswitchViewControl_Load(object sender, EventArgs e)
-        {
-
-        }
-
-
+        /// <summary>
+        /// 
+        /// </summary>
         unsafe public void LoadSensorPositions()
         {
-            SensorPositions.Clear();
-            SensorForces.Clear();
+            sensorPositions.Clear();
+            sensorForces.Clear();
 
             if (planterImage == null) return;
 
@@ -82,26 +111,26 @@ namespace FLib
                         int idx = 3 * x + y * iter.Stride;
                         if (data[idx + 2] >= 230 && data[idx + 1] <= 40 && data[idx] <= 40)
                         {
-                            SensorPositions.Add(new Point(x, y));
-                            SensorForces.Add(0);
+                            sensorPositions.Add(new Point(x, y));
+                            sensorForces.Add(0);
                         }
                     }
                 }
             }
 
-            int n = SensorPositions.Count;
+            int n = sensorPositions.Count;
             for (int i = 0; i < n; i++)
             {
-                SensorPositions.Add(new Point(2 * planterImage.Width - SensorPositions[i].X, SensorPositions[i].Y));
-                SensorForces.Add(0);
+                sensorPositions.Add(new Point(2 * planterImage.Width - sensorPositions[i].X, sensorPositions[i].Y));
+                sensorForces.Add(0);
             }
-            for (int i = 0; i < SensorPositions.Count; i++)
+            for (int i = 0; i < sensorPositions.Count; i++)
             {
                 sensorTopin.Add(i);
             }
 
-            Debug.Assert(SensorPositions.Count == 10 || SensorPositions.Count == 16);
-            Debug.Assert(SensorForces.Count == SensorPositions.Count);
+            Debug.Assert(sensorPositions.Count == 10 || sensorPositions.Count == 16);
+            Debug.Assert(sensorForces.Count == sensorPositions.Count);
         }
 
         public void LoadPinSensorCorrespondence(string filepath)
@@ -109,29 +138,22 @@ namespace FLib
             sensorTopin = DeserializeSensorToPin(System.IO.File.ReadAllLines(filepath));
         }
 
-        int frameIdx = 0;
-        SockswitchSensor sensor;
-        public enum RenderMode
-        {
-            Planter, RawSensor, Baseline, Window,
-        }
-
-        RenderMode renderMode = RenderMode.Planter;
-        float threshold = 0.3f;
-
-        public void UpdateWindow(SockswitchSensor sensor, SockswitchSVM svm = null)
+        List<List<double>[]> raw_waves_buffer = new List<List<double>[]>();
+        List<List<double[]>> baselines_buffer = new List<List<double[]>>();
+        public void UpdateWindowFunction(SockswitchSensor sensor, SockswitchSVM svm = null)
         {
             var raw_waves = sensor.GetPressureDataRange(0, sensor.FrameCount - 1);
+            raw_waves_buffer.Add(raw_waves);
+            var _b = new List<double[]>();
             for (int i = 0; i < raw_waves[0].Count; i++)
             {
-                svm.Baselines(raw_waves, i, 5, 0.1);
+                _b.Add(svm.Baselines(raw_waves, i, 5, 0.1));
                 svm.Window(raw_waves, svm.baselines, i, 10, 4);
             }
+            baselines_buffer.Add(_b);
         }
 
-        SockswitchSVM svm;
-
-        public void UpdateSensorForces(SockswitchSensor sensor, int frameIdx, RenderMode renderMode = RenderMode.Planter, SockswitchSVM svm = null)
+        public void UpdateSensorView(SockswitchSensor sensor, int frameIdx, RenderMode renderMode = RenderMode.Planter, SockswitchSVM svm = null, List<CheckBox> filterCB = null)
         {
             if (sensor == null) return;
 
@@ -139,30 +161,44 @@ namespace FLib
             float[] data = sensor.GetPressureData(frameIdx, out timeStamp);
             if (data != null)
             {
-                for (int i = 0; i < Math.Min(data.Length, SensorForces.Count); i++)
+                for (int i = 0; i < Math.Min(data.Length, sensorForces.Count); i++)
                 {
-                    SensorForces[i] = data[i];
+                    sensorForces[i] = data[i];
                 }
             }
 
-            // ?
             this.sensor = sensor;
-            this.frameIdx = frameIdx;
+            this.currentFrameIdx = frameIdx;
             this.renderMode = renderMode;
             this.svm = svm;
 
-            pictureBox2.Invalidate();
+            // フィルターの更新
+            if (this.filter == null)
+            {
+                this.filter = new bool[sensor.sensorNum];
+                for (int i = 0; i < this.filter.Length; i++)
+                {
+                    this.filter[i] = true;
+                }
+            }
+            if (filterCB != null)
+            {
+                for (int i = 0; i < this.filter.Length; i++)
+                {
+                    this.filter[i] = filterCB[i].Checked;
+                }
+            }
+
+            canvas.Invalidate();
         }
 
-        System.Drawing.Drawing2D.Matrix transform = new System.Drawing.Drawing2D.Matrix();
 
         private void pictureBox2_Paint(object sender, PaintEventArgs e)
         {
             try
             {
-                e.Graphics.Transform = transform;
-                if (renderMode == RenderMode.Planter) DrawPlanter(e.Graphics);
-                else DrawSensorData(e.Graphics);
+                if (renderMode == RenderMode.Planter) DrawPlanter(e.Graphics, filter);
+                else DrawSensorData(e.Graphics, filter);
             }
             catch (Exception ex)
             {
@@ -170,45 +206,84 @@ namespace FLib
             }
         }
 
-
-        void DrawPlanter(Graphics g)
+        void DrawPlanter(Graphics g, bool[] filter)
         {
             if (planterImage == null)
             {
                 return;
             }
-            float ratio = (float)pictureBox2.Height / planterImage.Height;
+            float ratio = (float)canvas.Height / planterImage.Height;
             int w = (int)(planterImage.Width * ratio);
-            int h = pictureBox2.Height;
+            int h = canvas.Height;
             int r = (int)(10 * ratio);
             g.Clear(Color.White);
             g.DrawImage(planterImage, new Rectangle(0, 0, w, h));
             g.DrawImage(planterImage, new Rectangle(2 * w, 0, -w, h));
-            for (int i = 0; i < SensorPositions.Count; i++)
+            for (int i = 0; i < sensorPositions.Count; i++)
             {
-                int x = (int)(ratio * SensorPositions[i].X);
-                int y = (int)(ratio * SensorPositions[i].Y);
-                int val = sensorTopin[i] < 0 || SensorForces.Count <= sensorTopin[i] ? 0 :
-                    (int)Math.Max(0, Math.Min(254,  100 * 255 * SensorForces[sensorTopin[i]]));
-                g.FillEllipse(
-                    new SolidBrush(heatMap.GetPixel(val, heatMap.Height / 2)),
-                    new Rectangle(x - r, y - r, 2 * r, 2 * r));
+                int pinId = sensorTopin[i];
+                int x = (int)(ratio * sensorPositions[i].X);
+                int y = (int)(ratio * sensorPositions[i].Y);
+                if (filter == null || filter[pinId])
+                {
+                    int val = pinId < 0 || sensorForces.Count <= pinId ?
+                        0 :
+                        (int)Math.Max(0, Math.Min(254, 100 * 255 * sensorForces[pinId]));
+                    g.FillEllipse(
+                        new SolidBrush(heatMap.GetPixel(val, heatMap.Height / 2)),
+                        new Rectangle(x - r, y - r, 2 * r, 2 * r));
+                }
+                else
+                {
+                    g.FillEllipse(
+                        Brushes.LightGray,
+                        new Rectangle(x - r, y - r, 2 * r, 2 * r));
+                }
             }
         }
 
-        Brush[] sensorDataBrushes = new Brush[] {
-            Brushes.Red,
-            Brushes.Yellow,
-            Brushes.Orange,
-            Brushes.Green,
-            Brushes.Cyan,
-            Brushes.Blue,
-            Brushes.SkyBlue,
-            Brushes.White,
-        };
-        List<Point>[] graph = null;
+        enum TimelineDrawPolicy
+        {
+            Top,
+            Bottom,
+            Full
+        }
 
-        void DrawSensorData(Graphics g)
+        Point GetTimelinePoint(TimelineDrawPolicy policy,  double x, double y)
+        {
+            float ox, oy, w, h;
+            switch (policy)
+            {
+                case TimelineDrawPolicy.Top:
+                    ox = 0;
+                    oy = 10;
+                    w = canvas.Width;
+                    h = canvas.Height / 2 - 20;
+                    break;
+                case TimelineDrawPolicy.Bottom:
+                    ox = 0;
+                    oy = canvas.Height / 2 + 10;
+                    w = canvas.Width;
+                    h = canvas.Height / 2 - 20;
+                    break;
+                default:
+                    ox = 0;
+                    oy = 10;
+                    w = canvas.Width;
+                    h = canvas.Height - 20;
+                    break;
+            }
+
+            x = Math.Min(1, Math.Max(0, x));
+            y = Math.Min(1, Math.Max(0, y));
+
+            int ptX = (int)(ox + w * x);
+            int ptY = (int)(oy + h - h * y);
+
+            return new Point(ptX, ptY);
+        }
+
+        void DrawSensorData(Graphics g, bool[] filter)
         {
             var sw = Stopwatch.StartNew();
 
@@ -216,24 +291,61 @@ namespace FLib
             if (svm == null) return;
 
             //            float ratio = (float)pictureBox2.Height / planterImage.Height;
-            float w = pictureBox2.Width * graphRatio.X;
-            float h = pictureBox2.Height * graphRatio.Y;
+            float w = canvas.Width;
+            float h = canvas.Height;
 
             g.Clear(Color.Black);
-            graph = new List<Point>[SensorForces.Count];
+            timeline = new List<Point>[sensorForces.Count];
 
-            for (int i = 0; i < graph.Length; i++) graph[i] = new List<Point>();
+            for (int i = 0; i < timeline.Length; i++) timeline[i] = new List<Point>();
 
-            const int span = 100;
-            var raw_waves = sensor.GetPressureDataRange(Math.Max(0, frameIdx - span), Math.Min(sensor.FrameCount - 1, frameIdx));
+            const int viewSpan = 100;
+            var raw_waves = sensor.GetPressureDataRange(Math.Max(0, currentFrameIdx - viewSpan), Math.Min(sensor.FrameCount - 1, currentFrameIdx));
+            if (raw_waves == null) return;
+
             switch (renderMode)
             {
                 case RenderMode.RawSensor:
                     for (int i = 0; i < raw_waves.Length; i++)
                     {
+                        int pinId = sensorTopin[i];
+                        var raw_wave = raw_waves[pinId];
                         for (int j = 0; j < raw_waves[i].Count; j++)
                         {
-                            graph[i].Add(new Point((int)(w * j / (double)raw_waves[i].Count), (int)(h - h * raw_waves[i][j])));
+                            var policy = pinId < sensor.sensorNumPerFoot ? TimelineDrawPolicy.Top : TimelineDrawPolicy.Bottom;
+                            double x = (double)(viewSpan - raw_waves[i].Count + j) / viewSpan;
+                            var pt = GetTimelinePoint(policy, x, raw_wave[j]);
+                            timeline[i].Add(pt);
+                        }
+                    }
+                    break;
+                case RenderMode.Baseline:
+                    for (int i = 0; i < raw_waves.Length; i++)
+                    {
+                        int pinId = sensorTopin[i];
+                        for (int j = 0; j < raw_waves[pinId].Count; j++)
+                        {
+                            int idx = currentFrameIdx - viewSpan + j;
+                            double x = (double)(viewSpan - raw_waves[i].Count + j) / viewSpan;
+                            double y = 0 <= idx && idx < svm.window.Count ? svm.baselines[idx][pinId] : 0;
+                            var policy = pinId < sensor.sensorNumPerFoot ? TimelineDrawPolicy.Top : TimelineDrawPolicy.Bottom;
+                            var pt = GetTimelinePoint(policy, x, y);
+                            timeline[i].Add(pt);
+                        }
+                    }
+                    break;
+                case RenderMode.Diff:
+                    for (int i = 0; i < raw_waves.Length; i++)
+                    {
+                        int pinId = sensorTopin[i];
+                        for (int j = 0; j < raw_waves[i].Count; j++)
+                        {
+                            int idx = currentFrameIdx - viewSpan + j;
+                            double x = (double)(viewSpan - raw_waves[i].Count + j) / viewSpan;
+                            double y = 0 <= idx && idx < svm.window.Count ? (raw_waves[pinId][j] - svm.baselines[idx][pinId]) : 0;
+                            var policy = pinId < sensor.sensorNumPerFoot ? TimelineDrawPolicy.Top : TimelineDrawPolicy.Bottom;
+                            var pt = GetTimelinePoint(policy, x, y);
+                            timeline[i].Add(pt);
                         }
                     }
                     break;
@@ -241,80 +353,145 @@ namespace FLib
                     // SVMの窓関数
                     for (int j = 0; j < raw_waves[0].Count - 1; j++)
                     {
-                        int idx = frameIdx - span + j;
-                        var pt = new Point((int)(w * j / (float)raw_waves[0].Count), 0);
-                        if (0 <= idx && idx < svm.window.Count)
-                        {
-                            pt.Y = (int)(h - h * svm.window[idx]);
-                        }
-                        graph[0].Add(pt);
-                        graph[8].Add(pt);
-                    }
-                    break;
-                default:
-                    for (int i = 0; i < raw_waves.Length; i++)
-                    {
-                        for (int j = 0; j < raw_waves[i].Count; j++)
-                        {
-                            int idx = frameIdx - span + j;
-                            var pt = new Point((int)(w * j / (float)raw_waves[0].Count), 0);
-                            if (0 <= idx && idx < svm.window.Count)
-                            {
-                                pt.Y = (int)(h - h * svm.baselines[idx][i]);
-                            }
-                            graph[i].Add(pt);
-                        }
+                        int pinId = sensorTopin[0];
+                        int idx = currentFrameIdx - raw_waves[pinId].Count + j;
+                        double x = (double)(viewSpan - raw_waves[pinId].Count + j) / viewSpan;
+                        double y = 0 <= idx && idx < svm.window.Count ? svm.window[idx] : 0;
+                        var pt = GetTimelinePoint(TimelineDrawPolicy.Full, x, y);
+                        timeline[0].Add(pt);
+                        timeline[8].Add(pt);
                     }
                     break;
             }
 
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
-            if (selectionStart >= 0)
+            // 目盛り（横）
+            Pen scalePen = new Pen(Brushes.Gray, 1);
+            for (int i = 0; i <= 10; i++)
             {
-                int idx0 = selectionStart - (frameIdx - graph[8].Count);
-                int idx1 = (selectionEnd <= -1 ? selectionStart + 1 : selectionEnd) - (frameIdx - graph[8].Count);
-                int x0 = graph[8][Math.Max(0, Math.Min(graph[8].Count - 1, idx0))].X;
-                int x1 = graph[8][Math.Max(0, Math.Min(graph[8].Count - 1, idx1))].X;
-                g.FillRectangle(new SolidBrush(Color.FromArgb(100, 255, 0, 0)), new Rectangle(x0, 0, x1 - x0, (int)h));
-            }
-            for (int i = 0; i < svm.windowRanges.Count; i++)
-            {
-                int start = svm.windowRanges[i].First - 10;
-                int end = svm.windowRanges[i].First + svm.windowRanges[i].Length + 10;
-                int idx0 = start - (frameIdx - graph[8].Count);
-                int idx1 = (end <= -1 ? start + 1 : end) - (frameIdx - graph[8].Count);
-                int x0 = graph[8][Math.Max(0, Math.Min(graph[8].Count - 1, idx0))].X;
-                int x1 = graph[8][Math.Max(0, Math.Min(graph[8].Count - 1, idx1))].X;
-                g.FillRectangle(new SolidBrush(Color.FromArgb(100, 255, 255, 255)), new Rectangle(x0, 0, x1 - x0, (int)h));
-            }
-            for (int i = 8; i < graph.Length; i++)
-            {
-                if (graph[i].Count >= 3)
+                if (renderMode != RenderMode.Window)
                 {
-                    g.DrawLines(new Pen(sensorDataBrushes[i % sensor.sensorNumPerFoot], 2), graph[i].ToArray());
+                    var pt0 = GetTimelinePoint(TimelineDrawPolicy.Top, 0, 0.1 * i);
+                    var pt1 = GetTimelinePoint(TimelineDrawPolicy.Top, 1, 0.1 * i);
+                    g.DrawLine(scalePen, pt0, pt1);
+                    var pt2 = GetTimelinePoint(TimelineDrawPolicy.Bottom, 0, 0.1 * i);
+                    var pt3 = GetTimelinePoint(TimelineDrawPolicy.Bottom, 1, 0.1 * i);
+                    g.DrawLine(scalePen, pt2, pt3);
+                }
+                else
+                {
+                    var pt0 = GetTimelinePoint(TimelineDrawPolicy.Full, 0, 0.1 * i);
+                    var pt1 = GetTimelinePoint(TimelineDrawPolicy.Full, 1, 0.1 * i);
+                    g.DrawLine(scalePen, pt0, pt1);
                 }
             }
-            g.DrawLine(new Pen(Brushes.Yellow),
-                new Point(0, (int)(h - h * Baseline)),
-                new Point(pictureBox2.Width, (int)(h - h * Baseline)));
+            // 目盛り（縦）
+            int _idx = currentFrameIdx / 10 * 10;
+            while (true)
+            {
+                // TODO
+                int i = currentFrameIdx - _idx;
+                if (i > viewSpan) break;
+                double x = (double)(viewSpan - i) / viewSpan;
+                if (renderMode != RenderMode.Window)
+                {
+                    var pt0 = GetTimelinePoint(TimelineDrawPolicy.Top, x, 0);
+                    var pt1 = GetTimelinePoint(TimelineDrawPolicy.Top, x, 1);
+                    g.DrawLine(scalePen, pt0, pt1);
+                    var pt2 = GetTimelinePoint(TimelineDrawPolicy.Bottom, x, 0);
+                    var pt3 = GetTimelinePoint(TimelineDrawPolicy.Bottom, x, 1);
+                    g.DrawLine(scalePen, pt2, pt3);
+                }
+                else
+                {
+                    var pt0 = GetTimelinePoint(TimelineDrawPolicy.Full, x, 0);
+                    var pt1 = GetTimelinePoint(TimelineDrawPolicy.Full, x, 1);
+                    g.DrawLine(scalePen, pt0, pt1);
+                }
+                _idx -= 10;
+            }
 
-            //            Console.WriteLine("draw: " + sw.ElapsedMilliseconds + " ms");
-            //          sw.Restart();
+            // 窓
+            var windowBrush = new SolidBrush(Color.FromArgb(100, 255, 255, 255));
+            var selectedBrush = new SolidBrush(Color.FromArgb(100, 255, 0, 0));
+            var frames = svm.GetAllFrames();
+            foreach (var frame in frames) 
+            {
+                HighlightSpan(g, windowBrush, frame, viewSpan, 0);
+            }
+            // 選択範囲
+            if (selectionStart >= 0)
+            {
+                CharacterRange range = selectionEnd < 0 ?
+                    new CharacterRange(selectionStart, 1):
+                    new CharacterRange(selectionStart, selectionEnd - selectionStart);
+                HighlightSpan(g, selectedBrush, range, viewSpan, 0);
+            }
+            // 時系列グラフ
+            for (int i = 0; i < timeline.Length; i++)
+            {
+                int pinId = sensorTopin[i];
+                if (filter != null && pinId < filter.Length && filter[pinId])
+                {
+                    if (timeline[pinId] != null && timeline[pinId].Count >= 3)
+                    {
+                        g.DrawLines(new Pen(sensorDataBrushes[pinId % sensor.sensorNumPerFoot], 2), timeline[pinId].ToArray());
+                    }
+                }
+            }
+        }
+
+        void HighlightSpan(Graphics g, Brush brush, CharacterRange range, int viewSpan, int margin)
+        {
+            int start = range.First - margin;
+            int end = range.First + range.Length + margin;
+            double _x0 = (start - currentFrameIdx + viewSpan) / (double)viewSpan;
+            double _x1 = (end - currentFrameIdx + viewSpan) / (double)viewSpan;
+            int x0 = GetTimelinePoint(TimelineDrawPolicy.Full, _x0, 0).X;
+            int x1 = GetTimelinePoint(TimelineDrawPolicy.Full, _x1, 0).X;
+            if (renderMode != RenderMode.Window)
+            {
+                int y0 = GetTimelinePoint(TimelineDrawPolicy.Top, 0, 0).Y;
+                int y1 = GetTimelinePoint(TimelineDrawPolicy.Top, 0, 1).Y;
+                int y2 = GetTimelinePoint(TimelineDrawPolicy.Bottom, 0, 0).Y;
+                int y3 = GetTimelinePoint(TimelineDrawPolicy.Bottom, 0, 1).Y;
+                Rectangle rect0 = new Rectangle(x0, y1, x1 - x0, y0 - y1);
+                Rectangle rect1 = new Rectangle(x0, y3, x1 - x0, y2 - y3);
+                g.FillRectangle(brush, rect0);
+                g.FillRectangle(brush, rect1);
+            }
+            else
+            {
+                int y0 = GetTimelinePoint(TimelineDrawPolicy.Full, 0, 0).Y;
+                int y1 = GetTimelinePoint(TimelineDrawPolicy.Full, 0, 1).Y;
+                Rectangle rect = new Rectangle(x0, y1, x1 - x0, y0 - y1);
+                g.FillRectangle(brush, rect);
+            }
+        }
+        
+        public int PointToPin(Point ptInCanvas)
+        {
+            int sensorId = PointToSensor(ptInCanvas);
+            if (0 <= sensorId && sensorId < sensorTopin.Count)
+            {
+                return sensorTopin[sensorId];
+            }
+            return -1;
         }
 
         public int PointToSensor(Point ptInCanvas)
         {
             if (planterImage != null)
             {
-                float ratio = (float)pictureBox2.Height / planterImage.Height;
+                float ratio = (float)canvas.Height / planterImage.Height;
                 int w = (int)(planterImage.Width * ratio);
-                int h = pictureBox2.Height;
+                int h = canvas.Height;
                 int r = (int)(10 * ratio);
-                for (int i = 0; i < SensorPositions.Count; i++)
+                for (int i = 0; i < sensorPositions.Count; i++)
                 {
-                    int x = (int)(ratio * SensorPositions[i].X);
-                    int y = (int)(ratio * SensorPositions[i].Y);
+                    int x = (int)(ratio * sensorPositions[i].X);
+                    int y = (int)(ratio * sensorPositions[i].Y);
                     float dx = ptInCanvas.X - x;
                     float dy = ptInCanvas.Y - y;
                     if (dx * dx + dy * dy < r * r)
@@ -335,6 +512,7 @@ namespace FLib
             }
             return text;
         }
+
         public static List<int> DeserializeSensorToPin(string[] lines)
         {
             List<int> sensorTopin = new List<int>();
@@ -363,36 +541,30 @@ namespace FLib
             System.IO.File.AppendAllText(filepath, SerializeSensorToPin(sensorTopin));
         }
 
-        Point tmpMousePoint = Point.Empty;
-        PointF prevTranslation = PointF.Empty;
-        PointF translation = PointF.Empty;
-
         private void pictureBox2_MouseDown(object sender, MouseEventArgs e)
         {
-            if (graph == null) return;
-            pictureBox2.Focus();
-            if (e.Button == System.Windows.Forms.MouseButtons.Right)
-            {
-                tmpMousePoint = e.Location;
-                prevTranslation = translation;
-            }
+            if (timeline == null) return;
+            canvas.Focus();
 
-            if (e.Button == System.Windows.Forms.MouseButtons.Left)
+            if (e.Button == System.Windows.Forms.MouseButtons.Left && renderMode != RenderMode.Planter)
             {
                 int x = e.Location.X;
-                for (int i = 0; i < graph[0].Count - 1; i++)
+                for (int i = 0; i < timeline[0].Count - 1; i++)
                 {
-                    float px = graph[0][i].X;
-                    float cx = graph[0][i + 1].X;
+                    float px = timeline[0][i].X;
+                    float cx = timeline[0][i + 1].X;
                     if (px <= x && x < cx)
                     {
                         if (selectionStart <= -1)
                         {
-                            selectionStart = frameIdx - graph[0].Count + i;
+                            selectionStart = currentFrameIdx - timeline[0].Count + i;
                         }
                         else if (selectionEnd <= -1)
                         {
-                            selectionEnd = frameIdx - graph[0].Count + i;
+                            int t0 = selectionStart;
+                            int t1 = currentFrameIdx - timeline[0].Count + i;
+                            selectionStart = Math.Min(t0, t1);
+                            selectionEnd = Math.Max(t0, t1);
                         }
                         else
                         {
@@ -401,58 +573,33 @@ namespace FLib
                         Parent.Text = "[" + selectionStart + "," + selectionEnd + "]";
                     }
                 }
-                pictureBox2.Invalidate();
+                canvas.Invalidate();
             }
             if (e.Button == System.Windows.Forms.MouseButtons.Right && svm != null)
             {
                 int x = e.Location.X;
-                for (int i = 0; i < svm.windowRanges.Count; i++)
+                var frames = svm.GetAllFrames();
+                for (int i = 0; i < frames.Count; i++)
                 {
-                    int idx0 = svm.windowRanges[i].First - 10 - (frameIdx - graph[8].Count);
-                    int idx1 = svm.windowRanges[i].First + svm.windowRanges[i].Length + 10 - (frameIdx - graph[8].Count);
-                    if (0 <= idx0 && idx1 < graph[8].Count)
+                    int idx0 = frames[i].First - (currentFrameIdx - timeline[8].Count);
+                    int idx1 = frames[i].First + frames[i].Length - (currentFrameIdx - timeline[8].Count);
+                    if (0 <= idx0 && idx1 < timeline[8].Count)
                     {
-                        int left = graph[8][idx0].X;
-                        int right = graph[8][idx1].X;
+                        int left = timeline[8][idx0].X;
+                        int right = timeline[8][idx1].X;
                         if (left <= x && x <= right)
                         {
-                            selectionStart = svm.windowRanges[i].First - 10;
-                            selectionEnd = svm.windowRanges[i].First + svm.windowRanges[i].Length + 10;
-                            Parent.Text = "[" + selectionStart + "," + selectionEnd + "]";
-                            pictureBox2.Invalidate();
+                            selectionStart = frames[i].First;
+                            selectionEnd = frames[i].First + frames[i].Length;
+                            var p = Parent;
+                            while (!(p is Form)) p = p.Parent; 
+                            p.Text = "[" + selectionStart + "," + selectionEnd + "]";
+                            canvas.Invalidate();
                             break;
                         }
                     }
                 }
             }
         }
-       public int selectionStart = -1;
-       public int selectionEnd = -1;
-
-        private void pictureBox2_MouseMove(object sender, MouseEventArgs e)
-        {
-            if (e.Button == System.Windows.Forms.MouseButtons.Right)
-            {
-                int dx = e.Location.X - tmpMousePoint.X;
-                int dy = e.Location.Y - tmpMousePoint.Y;
-                transform.Translate(dx, dy, System.Drawing.Drawing2D.MatrixOrder.Append);
-                tmpMousePoint = e.Location;
-                pictureBox2.Invalidate();
-            }
-        }
-
-        private void pictureBox2_MouseUp(object sender, MouseEventArgs e)
-        {
-            if (e.Button == System.Windows.Forms.MouseButtons.Right)
-            {
-                int dx = e.Location.X - tmpMousePoint.X;
-                int dy = e.Location.Y - tmpMousePoint.Y;
-                transform.Translate(dx, dy, System.Drawing.Drawing2D.MatrixOrder.Append);
-                tmpMousePoint = e.Location;
-                pictureBox2.Invalidate();
-            }
-        }
-
-        public double Baseline { get; set; }
     }
 }

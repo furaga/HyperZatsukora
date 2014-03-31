@@ -79,7 +79,10 @@
   <ItemGroup>
     <Compile Include="SimpleParser\SimpleParser.cs" />
     <Compile Include="SketchTyping\BeautificatedSketch.cs" />
+    <Compile Include="Sockswitch\SockswitchClient.cs" />
+    <Compile Include="Sockswitch\SockswitchServer.cs" />
     <Compile Include="Sockswitch\SockswitchSVM.cs" />
+    <Compile Include="UI\Hooker.cs" />
     <Compile Include="UI\TemplateMatching.cs" />
     <Compile Include="UI\UI.cs" />
     <Compile Include="Utils\BitmapHandler.cs" />

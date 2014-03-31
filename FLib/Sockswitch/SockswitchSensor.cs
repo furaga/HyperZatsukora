@@ -30,7 +30,7 @@ namespace FLib
 
         bool dummySerialMode = true;
         bool SerialIsOpen { get { if (dummySerialMode) return true; else return serialPort.IsOpen; } }
-        int SerialBytesToRead { get { if (dummySerialMode) return (3 * sensorNum + 1); else return serialPort.BytesToRead; } }
+        int SerialBytesToRead { get { if (dummySerialMode) return (6 * sensorNum + 1); else return serialPort.BytesToRead; } }
         System.Windows.Forms.Timer serialTimer;
         Stopwatch serialStopwatch = Stopwatch.StartNew();
 
@@ -114,7 +114,9 @@ namespace FLib
                             {
                                 float[] max = new float[sensorNum];
                                 for (int i = 0; i < max.Length; i++)
-                                    max[i] = Math.Max(0.1f, pressureData.Where((_, idx) => idx % sensorNum == i).Max());
+                                {
+                                    max[i] = Math.Min(1, Math.Max(0.001f, pressureData.Where((_, idx) => idx / sensorNum >= 10 && idx % sensorNum == i).Max()));
+                                }
                                 for (int i = 0; i < pressureData.Count; i++)
                                 {
                                     pressureData[i] /= max[i % sensorNum];
@@ -130,7 +132,6 @@ namespace FLib
                             return;
                     }
                 }
-
             }
             catch (Exception e)
             {
@@ -162,7 +163,7 @@ namespace FLib
                     serialTimer = new System.Windows.Forms.Timer()
                     {
                         Enabled = true,
-                        Interval = 100,
+                        Interval = 30,
                     };
                     serialTimer.Tick += new EventHandler(timer_Tick);
                     dummySerialMode = true;
@@ -174,6 +175,7 @@ namespace FLib
                 for (int i = 0; i < sensorNum; i++) rPinTovPin.Add(i);
                 this.OnUpdate = OnUpdate;
                 max = new float[] {
+                    /*
                     0.1f,
                     0.1485826f,
                     0.3059629f,
@@ -190,6 +192,27 @@ namespace FLib
                     0.3499511f,
                     0.1505376f,
                     0.3450635f,
+                    */
+                    /*
+                    4.59433f,
+                    1.447369f,
+                    1.134185f,
+                    1.245902f,
+                    0.2932551f,
+                    1.211765f,
+                    1.546667f,
+                    2.132479f,
+                    1.581396f,
+                    1.547298f,
+                    2.177823f,
+                    1.408759f,
+                    0.671533f,
+                    1.357542f,
+                    1.902598f,
+                    1.002833f,
+                     */
+                    1,1,1,1,1,1,1,1,
+                    1,1,1,1,1,1,1,1,
                 }.Take(sensorNum).ToArray();
             }
             catch (Exception ex)
@@ -198,7 +221,7 @@ namespace FLib
             }
         }
 
-        float[] max;
+        public float[] max;
         #endregion
 
         #region 生のシリアルデータから圧力データを復元・各フレームにおける圧力データの取得
@@ -308,7 +331,9 @@ namespace FLib
                 {
                     if (t_rawData == null)
                     {
-                        System.IO.StringReader sr = new System.IO.StringReader(System.IO.File.ReadAllText("../../../../../pressureData/201403032221_heeltap.txt"));
+                        System.IO.StringReader sr = new System.IO.StringReader(System.IO.File.ReadAllText("../../../../../pressureData/201403032222_scrolldown.txt"));
+//                        System.IO.StringReader sr = new System.IO.StringReader(System.IO.File.ReadAllText("../../../../../pressureData/20140310.txt"));
+                       
                         while (true)
                         {
                             string line = sr.ReadLine();
@@ -339,7 +364,6 @@ namespace FLib
                             }
                         }
                     }
-
 //                    for (int i = 0; i < max.Length; i++)
   //                      max[i] = Math.Max(0.1f, t_pressureData.Where((_, idx) => idx % sensorNum == i).Max());
                 }
