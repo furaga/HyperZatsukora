@@ -62,7 +62,7 @@ namespace FLib
             parameters.IsFullScreen = false;
 
             graphicsDevice = new GraphicsDevice(GraphicsAdapter.DefaultAdapter,
-                                                GraphicsProfile.Reach,
+                                                GraphicsProfile.HiDef,
                                                 parameters);
         }
 
@@ -119,10 +119,10 @@ namespace FLib
             if (DeviceResetting != null)
                 DeviceResetting(this, EventArgs.Empty);
 
-            parameters.BackBufferWidth = Math.Max(parameters.BackBufferWidth, width);
-            parameters.BackBufferHeight = Math.Max(parameters.BackBufferHeight, height);
+//            parameters.BackBufferWidth = Math.Max(parameters.BackBufferWidth, width);
+  //          parameters.BackBufferHeight = Math.Max(parameters.BackBufferHeight, height);
 
-            graphicsDevice.Reset(parameters);
+    //        graphicsDevice.Reset(parameters);
 
             if (DeviceReset != null)
                 DeviceReset(this, EventArgs.Empty);

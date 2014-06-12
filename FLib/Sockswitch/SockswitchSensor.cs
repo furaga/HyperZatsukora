@@ -22,15 +22,40 @@ namespace FLib
 
         SerialPort serialPort;
         List<byte> rawData = new List<byte>();
+        List<float> raw_pressureData = new List<float>();
         List<float> pressureData = new List<float>();
+        public List<bool> isNewPressureData = new List<bool>();
         List<long> timeStamps = new List<long>(); // 各フレームの取得時間
         List<int> rPinTovPin = new List<int>(); // 現実のピンと仮想ピンの対応関係
         int[] tmpLowData;
         int[] tmpSensorIdx = new int[2] { 0, 0 };
 
+        public List<Tuple<string, System.Drawing.CharacterRange>> anottationGestureNameList = new List<Tuple<string, System.Drawing.CharacterRange>>();
+
         bool dummySerialMode = true;
+        int dummyCurrentPos = 0;
+        Stopwatch dummyStopwatch = new Stopwatch();
+
         bool SerialIsOpen { get { if (dummySerialMode) return true; else return serialPort.IsOpen; } }
-        int SerialBytesToRead { get { if (dummySerialMode) return (6 * sensorNum + 1); else return serialPort.BytesToRead; } }
+        int SerialBytesToRead { get {
+            if (dummySerialMode)
+            {
+                if (t_timeStamps != null)
+                {
+                    for (int i = 0; i < t_timeStamps.Count; i++)
+                    {
+                        if (t_timeStamps[i] > dummyStopwatch.ElapsedMilliseconds)
+                        {
+                            return (i - FrameCount + 1) * sensorNum;
+                        }
+                    }
+//                    (3 * sensorNum + 1);
+                }
+                return 0;
+            }
+            else return serialPort.BytesToRead;
+        }
+        }
         System.Windows.Forms.Timer serialTimer;
         Stopwatch serialStopwatch = Stopwatch.StartNew();
 
@@ -42,6 +67,16 @@ namespace FLib
         public void Dispose()
         {
             serialPort.Close();
+        }
+
+        public void Clear()
+        {
+            rawData.Clear();
+            raw_pressureData.Clear();
+            pressureData.Clear();
+            isNewPressureData.Clear();
+            timeStamps.Clear();
+            anottationGestureNameList.Clear();
         }
 
         void timer_Tick(object sender, EventArgs e)
@@ -69,6 +104,9 @@ namespace FLib
                 sb.Append("timeStamps:\n");
                 sb.Append(string.Join(" ", timeStamps));
                 sb.Append("\n");
+                sb.Append("actualGestureName:\n");
+                sb.Append(string.Join(" ", anottationGestureNameList.Select(tpl => tpl.Item1 + "," + tpl.Item2.First + "," + tpl.Item2.Length).ToArray()));
+                sb.Append("\n");
                 sb.Append("end:\n");
                 System.IO.File.WriteAllText(filepath, sb.ToString());
             }
@@ -83,6 +121,7 @@ namespace FLib
             try
             {
                 System.IO.StringReader sr = new System.IO.StringReader(System.IO.File.ReadAllText(filepath));
+                Clear();
                 while (true)
                 {
                     string line = sr.ReadLine();
@@ -95,11 +134,12 @@ namespace FLib
                             break;
                         case "rawData":
                             line = sr.ReadLine().Trim();
-                            rawData = line.Split(' ').Select(s => byte.Parse(s)).ToList();
+                            var rawData = line.Split(' ').Select(s => byte.Parse(s)).ToArray();
+                            UpdatePressureData(rawData);
                             break;
                         case "pressureData":
                             line = sr.ReadLine().Trim();
-                            pressureData = line.Split(' ').Select(s => float.Parse(s)).ToList();
+                            //                            pressureData = line.Split(' ').Select(s => float.Parse(s)).ToList();
                             break;
                         case "timeStamps":
                             line = sr.ReadLine().Trim();
@@ -109,18 +149,21 @@ namespace FLib
                             line = sr.ReadLine().Trim();
                             rPinTovPin = line.Split(' ').Select(s => int.Parse(s)).ToList();
                             break;
+                        case "actualGestureName":
+                            line = sr.ReadLine().Trim();
+                            if (line.Length <= 0) break;
+                            anottationGestureNameList = line.Split(' ').Select(s =>
+                                {
+                                    var tokens = s.Split(',');
+                                    string gestureName = tokens[0];
+                                    int first = int.Parse(tokens[1]);
+                                    int length = int.Parse(tokens[2]);
+                                    return new Tuple<string, System.Drawing.CharacterRange>(gestureName, new System.Drawing.CharacterRange(first, length));
+                                }).ToList();
+                            break;
                         case "end":
                             if (pressureData.Count >= sensorNum)
                             {
-                                float[] max = new float[sensorNum];
-                                for (int i = 0; i < max.Length; i++)
-                                {
-                                    max[i] = Math.Min(1, Math.Max(0.001f, pressureData.Where((_, idx) => idx / sensorNum >= 10 && idx % sensorNum == i).Max()));
-                                }
-                                for (int i = 0; i < pressureData.Count; i++)
-                                {
-                                    pressureData[i] /= max[i % sensorNum];
-                                }
                                 float[] prevs = pressureData.Take(sensorNum).ToArray();
                                 for (int i = sensorNum; i < pressureData.Count; i++)
                                 {
@@ -141,7 +184,7 @@ namespace FLib
         #endregion
 
         #region  初期化
-        public SockswitchSensor(string portName, int baudRate, Parity parity, int dataBits, StopBits stopBits, int sensorNumPerFoot, Action OnUpdate)
+        public SockswitchSensor(string portName, int baudRate, Parity parity, int dataBits, StopBits stopBits, int sensorNumPerFoot, Action OnUpdate, float[] min, float[] max)
         {
             try
             {
@@ -174,46 +217,11 @@ namespace FLib
                 for (int i = 0; i < tmpLowData.Length; i++) tmpLowData[i] = -1;
                 for (int i = 0; i < sensorNum; i++) rPinTovPin.Add(i);
                 this.OnUpdate = OnUpdate;
-                max = new float[] {
-                    /*
-                    0.1f,
-                    0.1485826f,
-                    0.3059629f,
-                    0.1788856f,
-                    0.1f,
-                    0.1661779f,
-                    0.2199413f,
-                    0.228739f,
-                    0.1681329f,
-                    0.1446725f,
-                    0.18896608f,
-                    0.1339198f,
-                    0.1339198f,
-                    0.3499511f,
-                    0.1505376f,
-                    0.3450635f,
-                    */
-                    /*
-                    4.59433f,
-                    1.447369f,
-                    1.134185f,
-                    1.245902f,
-                    0.2932551f,
-                    1.211765f,
-                    1.546667f,
-                    2.132479f,
-                    1.581396f,
-                    1.547298f,
-                    2.177823f,
-                    1.408759f,
-                    0.671533f,
-                    1.357542f,
-                    1.902598f,
-                    1.002833f,
-                     */
-                    1,1,1,1,1,1,1,1,
-                    1,1,1,1,1,1,1,1,
-                }.Take(sensorNum).ToArray();
+
+                // キャリブレーション
+                this.max = max;
+                this.min = min;
+                UpdateCalibrationData(0, 0);
             }
             catch (Exception ex)
             {
@@ -221,11 +229,13 @@ namespace FLib
             }
         }
 
+        float[] pressureWidthPerFoot = new[] { 0.1f, 0.1f };
         public float[] max;
+        public float[] min;
         #endregion
 
         #region 生のシリアルデータから圧力データを復元・各フレームにおける圧力データの取得
-        void UpdatePressureData(byte[] data)
+        void UpdatePressureData(byte[] data, bool normalize = true)
         {
             rawData.AddRange(data);
 
@@ -261,12 +271,36 @@ namespace FLib
                             while (pressureData.Count > targetIdx) targetIdx += sensorNum;
                             while (pressureData.Count < targetIdx)
                             {
+                                raw_pressureData.Add(raw_pressureData.Count >= sensorNum ? raw_pressureData[raw_pressureData.Count - sensorNum] : 0);
                                 pressureData.Add(pressureData.Count >= sensorNum ? pressureData[pressureData.Count - sensorNum] : 0);
+                                isNewPressureData.Add(false);
+                                Debug.Assert(pressureData.Count == isNewPressureData.Count);
                             }
                             if (pressure >= 0)
-                                pressureData.Add(pressure / max[targetIdx % sensorNum]);
+                            {
+                                raw_pressureData.Add(pressure);
+                                if (normalize)
+                                {
+                                    int idx = targetIdx % sensorNum;
+                                    float nv = (pressure - min[idx]) / pressureWidthPerFoot[side];
+                                    pressureData.Add(nv);//FMath.Clamp(nv, 0, 1));
+                                    isNewPressureData.Add(true);
+                                    Debug.Assert(pressureData.Count == isNewPressureData.Count);
+                                }
+                                else
+                                {
+                                    pressureData.Add(pressure);
+                                    isNewPressureData.Add(true);
+                                    Debug.Assert(pressureData.Count == isNewPressureData.Count);
+                                }
+                            }
                             else
-                                pressureData.Add(pressureData.Count >= 1 ? pressureData.Last() : 0);
+                            {
+                                raw_pressureData.Add(raw_pressureData.Count >= sensorNum ? raw_pressureData[raw_pressureData.Count - sensorNum] : 0);
+                                pressureData.Add(pressureData.Count >= sensorNum ? pressureData[pressureData.Count - sensorNum] : 0);
+                                isNewPressureData.Add(false);
+                                Debug.Assert(pressureData.Count == isNewPressureData.Count);
+                            }
                             break;
                     }
                 }
@@ -331,9 +365,12 @@ namespace FLib
                 {
                     if (t_rawData == null)
                     {
-                        System.IO.StringReader sr = new System.IO.StringReader(System.IO.File.ReadAllText("../../../../../pressureData/201403032222_scrolldown.txt"));
-//                        System.IO.StringReader sr = new System.IO.StringReader(System.IO.File.ReadAllText("../../../../../pressureData/20140310.txt"));
-                       
+                        //                        System.IO.StringReader sr = new System.IO.StringReader(System.IO.File.ReadAllText("../../../../../pressureData/201403032222_scrolldown.txt"));
+//                        System.IO.StringReader sr = new System.IO.StringReader(System.IO.File.ReadAllText("../../../../../pressureData/furaga/data.txt"));
+                        System.IO.StringReader sr = new System.IO.StringReader(System.IO.File.ReadAllText("../../../../../pressureData/20140416_walking_video.txt"));
+                        dummyCurrentPos = 0;
+                        dummyStopwatch = Stopwatch.StartNew();
+
                         while (true)
                         {
                             string line = sr.ReadLine();
@@ -364,8 +401,8 @@ namespace FLib
                             }
                         }
                     }
-//                    for (int i = 0; i < max.Length; i++)
-  //                      max[i] = Math.Max(0.1f, t_pressureData.Where((_, idx) => idx % sensorNum == i).Max());
+                    //                    for (int i = 0; i < max.Length; i++)
+                    //                      max[i] = Math.Max(0.1f, t_pressureData.Where((_, idx) => idx % sensorNum == i).Max());
                 }
                 catch (Exception e)
                 {
@@ -422,9 +459,44 @@ namespace FLib
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message + ":" + ex.StackTrace);
+//                MessageBox.Show(ex.Message + ":" + ex.StackTrace);
             }
         }
         #endregion
+
+        public void UpdateCalibrationData(int start, int end)
+        {
+            if (max.All(x => x == 0.5f))
+            {
+                for (int i = 0; i < max.Length; i++)
+                {
+                    max[i] = 0;
+                    min[i] = 1;
+                }
+            }
+
+            start = (int)FMath.Clamp(start, 10, FrameCount - 10);
+            end = (int)FMath.Clamp(end, 10, FrameCount - 10);
+            if (start > end) FMath.Swap(ref start, ref end);
+
+            // 更新
+            for (int i = start * sensorNum; i < end * sensorNum; i++)
+            {
+                if (isNewPressureData[i])
+                {
+                    max[i % sensorNum] = Math.Max(max[i % sensorNum], raw_pressureData[i]);
+                    min[i % sensorNum] = Math.Min(min[i % sensorNum], raw_pressureData[i]);
+                }
+            }
+
+            for (int i = 0; i < max.Length; i++)
+            {
+                // 差が大きすぎたらバグってる
+                if (max[i] - min[i] <= 0.6f)
+                {
+                    pressureWidthPerFoot[(i / sensorNumPerFoot) % 2] = Math.Max(pressureWidthPerFoot[(i / sensorNumPerFoot) % 2], max[i] - min[i]);
+                }
+            }
+        }
     }
 }

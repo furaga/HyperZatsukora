@@ -33,10 +33,18 @@ namespace FLib
             using (Graphics g = Graphics.FromImage(thumbnail))
             {
                 g.Clear(bgColor);
-                float ratio = Math.Min((float)w / bmp.Width, (float)h / bmp.Height);
-                g.DrawImage(bmp, new Rectangle(0, 0, (int)(bmp.Width * ratio), (int)(bmp.Height * ratio)));
+                SizeF size = GetFittingSize(bmp, w, h);
+                g.DrawImage(bmp, new Rectangle(0, 0, (int)(size.Width), (int)(size.Height)));
             }
             return thumbnail;
+        }
+
+        static public SizeF GetFittingSize(Bitmap bmp, int w, int h)
+        {
+            float ratio = Math.Min((float)w / bmp.Width, (float)h / bmp.Height);
+            float ww = bmp.Width * ratio;
+            float hh = bmp.Height * ratio;
+            return new SizeF(ww, hh);
         }
 
         static public Bitmap FromSketch(List<List<Point>> sketch, int w, int h, Pen pen, Color clearColor)

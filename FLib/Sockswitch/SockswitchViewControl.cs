@@ -48,6 +48,7 @@ namespace FLib
             Brushes.Blue,
             Brushes.SkyBlue,
             Brushes.White,
+            Brushes.Red,
         };
         
         // 表示位置
@@ -140,18 +141,64 @@ namespace FLib
 
         List<List<double>[]> raw_waves_buffer = new List<List<double>[]>();
         List<List<double[]>> baselines_buffer = new List<List<double[]>>();
+        public Dictionary<int, string> gestureList;
+        public List<CharacterRange> gestureRecogRanges = new List<CharacterRange>();
+        List<CharacterRange> frames = new List<CharacterRange>();
         public void UpdateWindowFunction(SockswitchSensor sensor, SockswitchSVM svm = null)
         {
+            this.gestureList = new Dictionary<int, string>();
+//            this.intensities = new List<double>();
+//            this.gestureList = gestureList;
+  //          this.intensities = intensities;
             var raw_waves = sensor.GetPressureDataRange(0, sensor.FrameCount - 1);
             raw_waves_buffer.Add(raw_waves);
             var _b = new List<double[]>();
-            for (int i = 0; i < raw_waves[0].Count; i++)
+            gestureRecogRanges.Clear();
+            frames = svm.GetAllFrames();
+            for (int i = 0; i < frames.Count; i++)
             {
-                _b.Add(svm.Baselines(raw_waves, i, 5, 0.1));
-                svm.Window(raw_waves, svm.baselines, i, 10, 4);
+                var range = frames[i];
+                if (range.Length > 0)
+                {
+                    int start = range.First;
+                    for (int j = i - 1; j >= 0; j-- )
+                    {
+                        var t_range = frames[j];
+                        if (t_range.Length > 0)
+                        {
+                            var end = t_range.First + t_range.Length;
+                            if (start - end <= 6)
+                                start = t_range.First;
+                            else
+                                break;
+                        }
+                    }
+                    int width = range.First + range.Length - start;
+                    if (8 <= width && width <= 50)
+                    {
+                        if (range.First >= 10)
+                        {
+                            int inValidSensorCount = sensor.GetPressureDataRange(range.First, range.First + range.Length)
+                                .Select(ls => ls.Distinct().Count() <= 0.25 * ls.Count()) // すごい重複してたらなんかおかしい
+                                .Count();
+                            if (inValidSensorCount < sensor.sensorNum * 0.4)
+                            {
+                                double maxInt = svm.window.Where((_, k) => range.First <= k  && k < range.First + range.Length).Max();
+                                if (0.1f <= maxInt && maxInt <= 2f)
+                                {
+                                    gestureRecogRanges.Add(range);
+                                }
+                            }
+                        }
+                    }
+                }
             }
+
             baselines_buffer.Add(_b);
         }
+
+
+
 
         public void UpdateSensorView(SockswitchSensor sensor, int frameIdx, RenderMode renderMode = RenderMode.Planter, SockswitchSVM svm = null, List<CheckBox> filterCB = null)
         {
@@ -202,7 +249,7 @@ namespace FLib
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex + ":" + ex.StackTrace);
+//                MessageBox.Show(ex + ":" + ex.StackTrace);
             }
         }
 
@@ -249,7 +296,7 @@ namespace FLib
             Full
         }
 
-        Point GetTimelinePoint(TimelineDrawPolicy policy,  double x, double y)
+        Point GetTimelinePoint(TimelineDrawPolicy policy,  double x, double y, bool bound = true)
         {
             float ox, oy, w, h;
             switch (policy)
@@ -274,8 +321,11 @@ namespace FLib
                     break;
             }
 
-            x = Math.Min(1, Math.Max(0, x));
-            y = Math.Min(1, Math.Max(0, y));
+            if (bound)
+            {
+                x = Math.Min(1, Math.Max(0, x));
+                y = Math.Min(1, Math.Max(0, y));
+            }
 
             int ptX = (int)(ox + w * x);
             int ptY = (int)(oy + h - h * y);
@@ -295,7 +345,7 @@ namespace FLib
             float h = canvas.Height;
 
             g.Clear(Color.Black);
-            timeline = new List<Point>[sensorForces.Count];
+            timeline = new List<Point>[sensorForces.Count + 1];
 
             for (int i = 0; i < timeline.Length; i++) timeline[i] = new List<Point>();
 
@@ -318,7 +368,17 @@ namespace FLib
                             timeline[i].Add(pt);
                         }
                     }
-                    break;
+                        for (int j = 0; j < raw_waves[0].Count; j++)
+                        {
+                            double x = (double)(viewSpan - raw_waves[0].Count + j) / viewSpan;
+                            int idx = Math.Max(0, currentFrameIdx - viewSpan) + j;
+                            if (svm.window.Count > idx)
+                            {
+                                var pt = GetTimelinePoint(TimelineDrawPolicy.Bottom, x, svm.window[idx], false);
+                                timeline[timeline.Length - 1].Add(pt);
+                            }
+                        }
+                        break;
                 case RenderMode.Baseline:
                     for (int i = 0; i < raw_waves.Length; i++)
                     {
@@ -412,31 +472,45 @@ namespace FLib
                 _idx -= 10;
             }
 
-            // 窓
-            var windowBrush = new SolidBrush(Color.FromArgb(100, 255, 255, 255));
+            //            var windowBrush = new SolidBrush(Color.FromArgb(50, 255, 255, 255));
+            //          var actualGestureBrush = new SolidBrush(Color.FromArgb(100, 255, 255, 0));
+            var windowBrush = new SolidBrush(Color.FromArgb(50, 255, 255, 255));
+            var actualGestureBrush = new SolidBrush(Color.FromArgb(100, 255, 255, 0));
             var selectedBrush = new SolidBrush(Color.FromArgb(100, 255, 0, 0));
+            // 窓
             var frames = svm.GetAllFrames();
             foreach (var frame in frames) 
             {
                 HighlightSpan(g, windowBrush, frame, viewSpan, 0);
             }
+            // 手動で入力したジェスチャ領域
+            foreach (var tpl in sensor.anottationGestureNameList)
+            {
+                HighlightSpan(g, actualGestureBrush, tpl.Item2, viewSpan, 0);
+            }
             // 選択範囲
             if (selectionStart >= 0)
             {
                 CharacterRange range = selectionEnd < 0 ?
-                    new CharacterRange(selectionStart, 1):
+                    new CharacterRange(selectionStart, 1) :
                     new CharacterRange(selectionStart, selectionEnd - selectionStart);
                 HighlightSpan(g, selectedBrush, range, viewSpan, 0);
             }
+            // システムが認識した時点とそのジェスチャ
+            foreach (var range in gestureRecogRanges)
+            {
+                HighlightSpan(g, new SolidBrush(Color.FromArgb(150, 0, 255, 0)), range, viewSpan, 0);
+            }
+
             // 時系列グラフ
             for (int i = 0; i < timeline.Length; i++)
             {
-                int pinId = sensorTopin[i];
-                if (filter != null && pinId < filter.Length && filter[pinId])
+                int pinId = i < sensorTopin.Count ? sensorTopin[i] : i;
+                if (filter != null && (pinId >= filter.Length || filter[pinId]))
                 {
                     if (timeline[pinId] != null && timeline[pinId].Count >= 3)
                     {
-                        g.DrawLines(new Pen(sensorDataBrushes[pinId % sensor.sensorNumPerFoot], 2), timeline[pinId].ToArray());
+                        g.DrawLines(new Pen(pinId >= sensor.sensorNum ? Brushes.Purple: sensorDataBrushes[pinId % sensor.sensorNumPerFoot], 2), timeline[pinId].ToArray());
                     }
                 }
             }
@@ -570,7 +644,18 @@ namespace FLib
                         {
                             selectionStart = selectionEnd = -1;
                         }
-                        Parent.Text = "[" + selectionStart + "," + selectionEnd + "]";
+
+                        if (selectionEnd > selectionStart && selectionStart >= 10 && svm.window.Count > selectionEnd)
+                        {
+                            var p = Parent;
+                            while (!(p is Form)) p = p.Parent;
+                            p.Text =
+                                "[" + (currentFrameIdx - timeline[0].Count + i) + "]" +
+                                "[" + selectionStart + "," + selectionEnd + "]" +
+                                +svm.window.Where((val, idx) => selectionStart <= idx && idx < selectionEnd).Max()
+                                + ","
+                                + svm.window.Where((val, idx) => selectionStart <= idx && idx < selectionEnd).Min();
+                        }
                     }
                 }
                 canvas.Invalidate();
@@ -592,14 +677,37 @@ namespace FLib
                             selectionStart = frames[i].First;
                             selectionEnd = frames[i].First + frames[i].Length;
                             var p = Parent;
-                            while (!(p is Form)) p = p.Parent; 
+                            while (!(p is Form)) p = p.Parent;
                             p.Text = "[" + selectionStart + "," + selectionEnd + "]";
                             canvas.Invalidate();
                             break;
                         }
                     }
                 }
+
+                for (int i = 0; i < sensor.anottationGestureNameList.Count; i++)
+                {
+                    int idx0 = sensor.anottationGestureNameList[i].Item2.First - (currentFrameIdx - timeline[8].Count);
+                    int idx1 = sensor.anottationGestureNameList[i].Item2.First + sensor.anottationGestureNameList[i].Item2.Length - (currentFrameIdx - timeline[8].Count);
+                    if (0 <= idx0 && idx1 < timeline[8].Count)
+                    {
+                        int left = timeline[8][idx0].X;
+                        int right = timeline[8][idx1].X;
+                        if (left <= x && x <= right)
+                        {
+                            var p = Parent;
+                            while (!(p is Form)) p = p.Parent;
+                            p.Text = sensor.anottationGestureNameList[i].Item1;
+                            break;
+                        }
+                    }
+                }
             }
+        }
+
+        private void canvas_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }

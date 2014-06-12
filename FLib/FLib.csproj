@@ -83,6 +83,12 @@
     <Compile Include="Sockswitch\SockswitchServer.cs" />
     <Compile Include="Sockswitch\SockswitchSVM.cs" />
     <Compile Include="UI\Hooker.cs" />
+    <Compile Include="UI\TakeScreenshotForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UI\TakeScreenshotForm.Designer.cs">
+      <DependentUpon>TakeScreenshotForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="UI\TemplateMatching.cs" />
     <Compile Include="UI\UI.cs" />
     <Compile Include="Utils\BitmapHandler.cs" />
@@ -122,6 +128,9 @@
     <Compile Include="XNA\XNATexture.cs" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="UI\TakeScreenshotForm.resx">
+      <DependentUpon>TakeScreenshotForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Utils\DraggablePictureBox.resx">
       <DependentUpon>DraggablePictureBox.cs</DependentUpon>
     </EmbeddedResource>
@@ -159,7 +168,6 @@
     </Content>
     <Content Include="TODO.txt" />
   </ItemGroup>
-  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

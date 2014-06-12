@@ -63,6 +63,8 @@ namespace FLib
 
         XNAServiceContainer services = new XNAServiceContainer();
 
+        public Size Resolution { get { return resolution; } set { resolution = value; } }
+        Size resolution = new Size(1600, 1200);
 
         #endregion
 
@@ -77,9 +79,7 @@ namespace FLib
             // Don't initialize the graphics device if we are running in the designer.
             if (!DesignMode)
             {
-                graphicsDeviceService = XNAService.AddRef(Handle,
-                                                                     ClientSize.Width,
-                                                                     ClientSize.Height);
+                graphicsDeviceService = XNAService.AddRef(Handle, Resolution.Width, Resolution.Height);
 
                 // Register the service, so components like ContentManager can find it.
                 services.AddService<IGraphicsDeviceService>(graphicsDeviceService);
@@ -90,7 +90,6 @@ namespace FLib
 
             base.OnCreateControl();
         }
-
 
         /// <summary>
         /// Disposes the control.
@@ -118,6 +117,8 @@ namespace FLib
         protected override void OnPaint(PaintEventArgs e)
         {
             string beginDrawError = BeginDraw();
+
+            e.Graphics.Clear(Color.White);
 
             if (string.IsNullOrEmpty(beginDrawError))
             {
@@ -164,14 +165,13 @@ namespace FLib
             viewport.X = 0;
             viewport.Y = 0;
 
-            viewport.Width = ClientSize.Width;
-            viewport.Height = ClientSize.Height;
+            viewport.Width = GraphicsDevice.PresentationParameters.BackBufferWidth;// ClientSize.Width;
+            viewport.Height = GraphicsDevice.PresentationParameters.BackBufferHeight; // ClientSize.Height;
 
             viewport.MinDepth = 0;
             viewport.MaxDepth = 1;
 
             GraphicsDevice.Viewport = viewport;
-
             return null;
         }
 
@@ -186,10 +186,15 @@ namespace FLib
         {
             try
             {
-                Rectangle sourceRectangle = new Rectangle(0, 0, ClientSize.Width,
-                                                                ClientSize.Height);
-
-                GraphicsDevice.Present(sourceRectangle, null, this.Handle);
+                int gw = GraphicsDevice.PresentationParameters.BackBufferWidth;
+                int gh = GraphicsDevice.PresentationParameters.BackBufferHeight;
+                int cw = ClientSize.Width;
+                int ch = ClientSize.Height;
+                int ox = (gw - cw) / 2;
+                int oy = (gh - ch) / 2;
+                Rectangle srcRect = new Rectangle(ox, oy, cw, ch);
+                Rectangle dstRect = new Rectangle(0, 0, cw, ch);
+                GraphicsDevice.Present(srcRect, dstRect, this.Handle);
             }
             catch
             {

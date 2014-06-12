@@ -560,7 +560,7 @@ namespace FLib
 
             // 隣接している似た色の領域をまとめる
             Dictionary<int, int> segmentCorrespondence = new Dictionary<int, int>();
-
+            /*
             int id = 0;
             for (int y = 0; y < edgeImage.Height; y++)
             {
@@ -577,10 +577,10 @@ namespace FLib
                     id++;
                 }
             }
-
             for (int i = 0; i < labelMap.Length; i++)
                 while (segmentCorrespondence.ContainsKey(labelMap[i]))
                     labelMap[i] = segmentCorrespondence[labelMap[i]];
+            */
         }
         void AddToContour(HashSet<int> uncoloredPixels, PriorityQueue<ContourPixel> contour, int[] labelMap, int x, int y, ContourPixel src, BitmapIterator orgIter, float threshold)
         {

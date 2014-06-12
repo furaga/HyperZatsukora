@@ -16,7 +16,7 @@ namespace FLib
     /// GUI操作関数群を定義しているクラス
     // スクリプト側ではこの中の関数が呼ばれることでGUI操作を行う
     /// </summary>
-    class UI
+    public class UI
     {
         [DllImport("user32.dll")]
         private static extern void mouse_event(UInt32 dwFlags, UInt32 dx, UInt32 dy, UInt32 dwData, IntPtr dwExtraInfo);
@@ -306,5 +306,23 @@ namespace FLib
         // メッセージボックスの表示
         public void messageBox(string text) { MessageBox.Show(text); }
 
+        public static Bitmap TakeScreenshot(Rectangle rect)
+        {
+            var size = new Size(rect.Width, rect.Height);
+            var bmp = new Bitmap(size.Width, size.Height);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.CopyFromScreen(rect.X, rect.Y, 0, 0, size, CopyPixelOperation.SourceCopy);
+            }
+            return bmp;
+        }
+
+        public static Bitmap TakeScreenshotInteractive(Form owner)
+        {
+            using (var form = new TakeScreenshotForm())
+            {
+                return form.takeScreenshot(owner);
+            }
+        }
     }
 }
