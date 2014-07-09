@@ -190,8 +190,8 @@ namespace FLib
                 int gh = GraphicsDevice.PresentationParameters.BackBufferHeight;
                 int cw = ClientSize.Width;
                 int ch = ClientSize.Height;
-                int ox = (gw - cw) / 2;
-                int oy = (gh - ch) / 2;
+                int ox = 0;// (gw - cw) / 2;
+                int oy = 0;// (gh - ch) / 2;
                 Rectangle srcRect = new Rectangle(ox, oy, cw, ch);
                 Rectangle dstRect = new Rectangle(0, 0, cw, ch);
                 GraphicsDevice.Present(srcRect, dstRect, this.Handle);

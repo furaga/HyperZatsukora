@@ -247,7 +247,7 @@ namespace FLib
                 if (renderMode == RenderMode.Planter) DrawPlanter(e.Graphics, filter);
                 else DrawSensorData(e.Graphics, filter);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
 //                MessageBox.Show(ex + ":" + ex.StackTrace);
             }

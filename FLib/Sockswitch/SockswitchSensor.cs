@@ -457,7 +457,7 @@ namespace FLib
                 UpdatePressureData(data);
                 OnUpdate();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
 //                MessageBox.Show(ex.Message + ":" + ex.StackTrace);
             }

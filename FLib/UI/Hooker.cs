@@ -62,7 +62,6 @@ namespace FLib.Dummy
     delegate int MouseHookHandler(int code, WM message, IntPtr state);
     delegate int KeyHookHandler(int nCode, WM wParam, ref KBDLLHOOKSTRUCT lParam);
 
-
     public class Hooker
     {
         [DllImport("user32.dll", SetLastError = true)]
@@ -80,11 +79,12 @@ namespace FLib.Dummy
         IntPtr keyHook;
         MouseHookHandler mouseHandler;
         KeyHookHandler keyHandler;
-        public bool onCtrl = false;
-        public bool onAlt = false;
-        public bool onShift = false;
-        public bool onFn = false;
-        public bool onWin = false;
+        public bool onCtrl { get; private set; }
+        public bool onAlt { get; private set; }
+        public bool onShift { get; private set; }
+        public bool onFn { get; private set; }
+        public bool onWin { get; private set; }
+        public bool hooking { get; private set; }
 
         //-----------------------------------------------------
         // フック開始/終了
@@ -106,14 +106,20 @@ namespace FLib.Dummy
             {
                 UnhookWindowsHookEx(mouseHook);
                 UnhookWindowsHookEx(keyHook);
-                int errorCode = Marshal.GetLastWin32Error();
-                Console.WriteLine(new Win32Exception(errorCode));
+                //                int errorCode = Marshal.GetLastWin32Error();
+                //                Console.WriteLine(new Win32Exception(errorCode));
+                hooking = false;
+            }
+            else
+            {
+                hooking = true;
             }
         }
 
         // キー・マウス入力をアンフック
         public void Unhook()
         {
+            hooking = false;
             UnhookWindowsHookEx(mouseHook);
             UnhookWindowsHookEx(keyHook);
         }
