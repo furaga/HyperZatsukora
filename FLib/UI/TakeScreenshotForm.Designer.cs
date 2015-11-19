@@ -38,9 +38,8 @@
             this.ClientSize = new System.Drawing.Size(284, 261);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
             this.Name = "TakeScreenshotForm";
-            this.Opacity = 0.5D;
+            this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
             this.Text = "TakeScreenshotForm";
-            this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
             this.Load += new System.EventHandler(this.TakeScreenshotForm_Load);
             this.Paint += new System.Windows.Forms.PaintEventHandler(this.TakeScreenshotForm_Paint);
             this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.TakeScreenshotForm_KeyDown);
