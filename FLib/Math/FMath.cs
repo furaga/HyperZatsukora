@@ -64,7 +64,7 @@ namespace FLib
                 return false;
             float lambda = ksi / delta;
             float mu = eta / delta;
-            return 0 <= lambda && lambda <= 1 && 0 <= mu && mu <= 1;
+            return -1e-4 <= lambda && lambda <= 1 + 1e-4 && -1e-4 <= mu && mu <= 1 + 1e-4;
         }
 
         public static bool IsCrossed(PointF p1, PointF p2, List<PointF> path)
@@ -85,6 +85,14 @@ namespace FLib
             float dx = start.X - end.X;
             float dy = start.Y - end.Y;
             return dx * dx + dy * dy;
+        }
+
+        public static float GetDistanceToLine(PointF pt, List<PointF> line)
+        {
+            float min = float.MaxValue;
+            for (int i = 0; i < line.Count - 1; i++)
+                min = Math.Min(min, GetDistanceToLine(pt, line[i], line[i + 1]));
+            return min;
         }
 
         public static float GetDistanceToLine(PointF pt, PointF lineStart, PointF lineEnd, bool ignoreIfOut = true)
@@ -331,6 +339,49 @@ namespace FLib
             return new PointF(x, y);
         }
 
+        public static List<int> FloodFill<T>(int n, Dictionary<int, List<int>> edges, Func<int, int, int, T, bool> cond, T tag)
+        {
+            HashSet<int> uncheck = new HashSet<int>();
+            List<int> labels = new List<int>();
+            int c = 0;
+
+            for (int i = 0; i < n; i++)
+            {
+                uncheck.Add(i);
+                labels.Add(-1);
+            }
+
+            while (uncheck.Count >= 1)
+            {
+                HashSet<int> check = new HashSet<int>() { uncheck.First() };
+                while (check.Count >= 1)
+                {
+                    int idx = check.First();
+
+                    labels[idx] = c;
+                    check.Remove(idx);
+                    uncheck.Remove(idx);
+
+                    if (edges == null)
+                        continue;
+
+                    if (!edges.ContainsKey(idx))
+                        continue;
+
+                    List<int> nexts = edges[idx];
+                    for (int i = 0; i < nexts.Count; i++)
+                    {
+                        if (!uncheck.Contains(nexts[i]))
+                            continue;
+                        if (cond == null || cond(idx, nexts[i], n, tag))
+                            check.Add(nexts[i]);
+                    }
+                }
+                c++;
+            }
+
+            return labels;
+        }
 
     }
 }

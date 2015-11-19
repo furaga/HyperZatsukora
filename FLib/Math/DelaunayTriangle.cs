@@ -11,7 +11,6 @@ using System.Drawing.Drawing2D;
 
 namespace FLib
 {
-
     public class FCircle
     {
         public PointF center;
@@ -220,4 +219,5 @@ namespace FLib
             return new FTriangle(p1, p2, p3);
         }
     }
+
 }

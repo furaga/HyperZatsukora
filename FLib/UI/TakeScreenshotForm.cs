@@ -17,8 +17,8 @@ namespace FLib
         Point? end = null;
         private Rectangle GetRectangle(Point start, Point end)
         {
-            var x = Math.Min(start.X, end.X);
-            var y = Math.Min(start.Y, end.Y);
+            var x = Math.Min(start.X, end.X) - Location.X;
+            var y = Math.Min(start.Y, end.Y) - Location.Y;
             var w = Math.Abs(start.X - end.X);
             var h = Math.Abs(start.Y - end.Y);
             return new Rectangle(x, y, w, h);
@@ -32,8 +32,14 @@ namespace FLib
 
         private void TakeScreenshotForm_Load(object sender, EventArgs e)
         {
-
+            this.SetStyle(
+              ControlStyles.DoubleBuffer |
+              ControlStyles.UserPaint |
+              ControlStyles.AllPaintingInWmPaint,
+              true);
         }
+
+        Bitmap currentScreenshot_ = null;
 
         public Bitmap takeScreenshot(Form owner)
         {
@@ -42,19 +48,47 @@ namespace FLib
                 owner.Hide();
                 System.Threading.Thread.Sleep(500);
 
-                using (var screenshot = UI.TakeScreenshot(Screen.PrimaryScreen.Bounds))
+                int left = int.MaxValue;
+                int right = int.MinValue;
+                int top = int.MaxValue;
+                int bottom = int.MinValue;
+
+                foreach (var scr in Screen.AllScreens)
+                {
+                    left = Math.Min(left, scr.WorkingArea.Left);
+                    right = Math.Max(right, scr.WorkingArea.Right);
+                    top = Math.Min(top, scr.WorkingArea.Top);
+                    bottom = Math.Max(bottom, scr.WorkingArea.Bottom);
+                }
+
+                var bound = new Rectangle(left, top, right - left, bottom - top);
+                using (var screenshot = UI.TakeScreenshot(bound))
                 {
                     if (form.WindowState == FormWindowState.Maximized)
-                        form.WindowState = FormWindowState.Normal;
+                    {
+                    }
+                    //form.SetBounds(bound.X, bound.Y, bound.Width, bound.Height);
+                    //form.Show();
+                    //form.Activate();
 
-                    form.FormBorderStyle = FormBorderStyle.None;
-                    form.WindowState = FormWindowState.Maximized;
-                    form.Paint += (sender, e) =>
-                            e.Graphics.DrawImage(screenshot, Point.Empty);
-                    form.Show();
-                    form.Activate();
+                    //form.StartPosition = FormStartPosition.Manual;
+                    //form.SetBounds(bound.X, bound.Y, bound.Width, bound.Height);
+                    //form.WindowState = FormWindowState.Normal;
+                    //form.FormBorderStyle = FormBorderStyle.None;
+                    //form.Paint += (sender, e) =>
+                    //        e.Graphics.DrawImage(screenshot, bound.Location);
+                    //form.Show();
+                    //form.Activate();
 
+                    this.SetBounds(bound.X, bound.Y, bound.Width, bound.Height);
+                    this.StartPosition = FormStartPosition.Manual;
+                    this.FormBorderStyle = FormBorderStyle.None;
+                    this.WindowState = FormWindowState.Normal;
+
+                    currentScreenshot_ = screenshot;
                     this.ShowDialog();
+                    currentScreenshot_ = null;
+
                     owner.Show();
 
                     if (start != null && end != null)
@@ -96,9 +130,55 @@ namespace FLib
 
             end = MousePosition;
 
-            using (var g = CreateGraphics())
+            this.Invalidate();
+
+            //using (var g = CreateGraphics())
+            //{
+            //    g.Clear(Color.Black);
+
+            //    if (currentScreenshot_ != null)
+            //    {
+            //        g.DrawImage(currentScreenshot_, Point.Empty);
+            //    }
+
+            //    var rect = GetRectangle(start.Value, end.Value);
+            //    g.DrawRectangle(pen, rect);
+
+            //    var pt1 = new Point(rect.Left, (rect.Top + rect.Bottom) / 2);
+            //    var pt2 = new Point(rect.Right, pt1.Y);
+            //    g.DrawLine(pen, pt1, pt2);
+
+            //    pt1 = new Point((rect.Left + rect.Right) / 2, rect.Top);
+            //    pt2 = new Point(pt1.X, rect.Bottom);
+            //    g.DrawLine(pen, pt1, pt2);
+            //}
+        }
+
+        private void TakeScreenshotForm_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Escape)
+            {
+                Close();
+            }
+        }
+
+        private void TakeScreenshotForm_Paint(object sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+           // using (var g = CreateGraphics())
             {
                 g.Clear(Color.Black);
+
+                if (currentScreenshot_ != null)
+                {
+                    g.DrawImage(currentScreenshot_, Point.Empty);
+                }
+
+                if (start == null || end.Value == null)
+                {
+                    return;
+                }
+
                 var rect = GetRectangle(start.Value, end.Value);
                 g.DrawRectangle(pen, rect);
 
@@ -109,14 +189,6 @@ namespace FLib
                 pt1 = new Point((rect.Left + rect.Right) / 2, rect.Top);
                 pt2 = new Point(pt1.X, rect.Bottom);
                 g.DrawLine(pen, pt1, pt2);
-            }
-        }
-
-        private void TakeScreenshotForm_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.Escape)
-            {
-                Close();
             }
         }
     }

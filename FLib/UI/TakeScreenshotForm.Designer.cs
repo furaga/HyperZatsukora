@@ -42,6 +42,7 @@
             this.Text = "TakeScreenshotForm";
             this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
             this.Load += new System.EventHandler(this.TakeScreenshotForm_Load);
+            this.Paint += new System.Windows.Forms.PaintEventHandler(this.TakeScreenshotForm_Paint);
             this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.TakeScreenshotForm_KeyDown);
             this.MouseDown += new System.Windows.Forms.MouseEventHandler(this.TakeScreenshotForm_MouseDown);
             this.MouseMove += new System.Windows.Forms.MouseEventHandler(this.BlackForm_MouseMove);
