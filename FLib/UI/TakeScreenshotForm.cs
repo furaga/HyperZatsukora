@@ -30,12 +30,12 @@ namespace FLib
         }
 
         private void TakeScreenshotForm_Load(object sender, EventArgs e)
-        {
-            this.SetStyle(
-              ControlStyles.DoubleBuffer |
-              ControlStyles.UserPaint |
-              ControlStyles.AllPaintingInWmPaint,
-              true);
+        {            //this.SetStyle(
+            //  ControlStyles.DoubleBuffer |
+            //  ControlStyles.UserPaint |
+            //  ControlStyles.AllPaintingInWmPaint,
+            //  true);
+
         }
 
         Rectangle getScreenBounds()
@@ -59,33 +59,67 @@ namespace FLib
 
         Bitmap currentScreenshot_ = null;
 
-        public Bitmap takeScreenshot(Form owner)
+        public Bitmap takeScreenshot(Form owner, bool hideOwnerForm = true)
         {
-            owner.Hide();
-            System.Threading.Thread.Sleep(500);
+            if (hideOwnerForm)
+            {
+                owner.Hide();
+                System.Threading.Thread.Sleep(500);
+            }
 
             var bound = getScreenBounds();
             using (var screenshot = UI.TakeScreenshot(bound))
             {
-                this.SetBounds(bound.X, bound.Y, bound.Width, bound.Height);
-
-                currentScreenshot_ = screenshot;
-                this.ShowDialog();
-                currentScreenshot_ = null;
-                
-                owner.Show();
-
-                if (start != null && end != null)
+                using (var form = new Form())
                 {
-                    Rectangle rect = GetRectangle(start.Value, end.Value);
-                    Bitmap bmp = new Bitmap(rect.Width, rect.Height, screenshot.PixelFormat);
-
-                    using (Graphics g = Graphics.FromImage(bmp))
+                    // 背景（スクリーンショット画像）を表示するフォームを作成
+                    form.SetBounds(bound.X, bound.Y, bound.Width, bound.Height);
+                    form.Paint += (sender, e) =>
                     {
-                        g.DrawImage(screenshot, new Rectangle(0, 0, rect.Width, rect.Height), rect, GraphicsUnit.Pixel);
+                        if (screenshot != null)
+                        {
+                            prevScreenshot_ = currentScreenshot_;
+                            e.Graphics.DrawImage(currentScreenshot_, Point.Empty);
+                            e.Graphics.FillRectangle(new SolidBrush(Color.FromArgb(128, 0, 0, 0)), new Rectangle(0, 0, Width, Height));
+                        }
+                    };
+                    form.StartPosition = FormStartPosition.Manual;
+                    form.TopMost = true;
+                    form.FormBorderStyle = System.Windows.Forms.FormBorderStyle.None;
+                    form.WindowState = FormWindowState.Normal;
+                    form.Show();
+                    form.Activate();
+
+
+                    // キャプチャ範囲を表示するフォームを初期化
+                    this.SetBounds(bound.X, bound.Y, bound.Width, bound.Height);
+
+
+                    // キャプチャ
+                    currentScreenshot_ = screenshot;
+                    this.ShowDialog();
+                    currentScreenshot_ = null;
+
+
+                    if (hideOwnerForm)
+                    {
+                        owner.Show();
                     }
-                    
-                    return bmp;
+
+
+                    // ドラッグした範囲の画像を切り出す
+                    if (start != null && end != null)
+                    {
+                        Rectangle rect = GetRectangle(start.Value, end.Value);
+                        Bitmap bmp = new Bitmap(rect.Width, rect.Height, screenshot.PixelFormat);
+
+                        using (Graphics g = Graphics.FromImage(bmp))
+                        {
+                            g.DrawImage(screenshot, new Rectangle(0, 0, rect.Width, rect.Height), rect, GraphicsUnit.Pixel);
+                        }
+
+                        return bmp;
+                    }
                 }
             }
 
@@ -128,30 +162,51 @@ namespace FLib
             }
         }
 
+        Bitmap prevScreenshot_ = null;
+
         private void TakeScreenshotForm_Paint(object sender, PaintEventArgs e)
         {
-            var g = e.Graphics;
-            if (currentScreenshot_ != null)
-            {
-                g.DrawImage(currentScreenshot_, Point.Empty);
-                g.FillRectangle(new SolidBrush(Color.FromArgb(128, 0, 0, 0)), new Rectangle(0, 0, Width, Height));
-            }
-
             if (start == null || end.Value == null)
             {
                 return;
             }
 
             var rect = GetRectangle(start.Value, end.Value);
-            g.DrawRectangle(pen, rect);
+            e.Graphics.DrawRectangle(pen, rect);
 
             var pt1 = new Point(rect.Left, (rect.Top + rect.Bottom) / 2);
             var pt2 = new Point(rect.Right, pt1.Y);
-            g.DrawLine(pen, pt1, pt2);
+            e.Graphics.DrawLine(pen, pt1, pt2);
 
             pt1 = new Point((rect.Left + rect.Right) / 2, rect.Top);
             pt2 = new Point(pt1.X, rect.Bottom);
-            g.DrawLine(pen, pt1, pt2);
+            e.Graphics.DrawLine(pen, pt1, pt2);
+
+        //    if (currentScreenshot_ != null)// && prevScreenshot_ != currentScreenshot_)
+        //    {
+        //        prevScreenshot_ = currentScreenshot_;
+        //        e.Graphics.DrawImage(currentScreenshot_, Point.Empty);
+        //        e.Graphics.FillRectangle(new SolidBrush(Color.FromArgb(128, 0, 0, 0)), new Rectangle(0, 0, Width, Height));
+        //    }
+        }
+
+        private void pictureBox1_Paint(object sender, PaintEventArgs e)
+        {
+            if (start == null || end.Value == null)
+            {
+                return;
+            }
+
+            var rect = GetRectangle(start.Value, end.Value);
+            e.Graphics.DrawRectangle(pen, rect);
+
+            var pt1 = new Point(rect.Left, (rect.Top + rect.Bottom) / 2);
+            var pt2 = new Point(rect.Right, pt1.Y);
+            e.Graphics.DrawLine(pen, pt1, pt2);
+
+            pt1 = new Point((rect.Left + rect.Right) / 2, rect.Top);
+            pt2 = new Point(pt1.X, rect.Bottom);
+            e.Graphics.DrawLine(pen, pt1, pt2);
         }
     }
 }

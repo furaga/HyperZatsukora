@@ -317,11 +317,11 @@ namespace FLib
             return bmp;
         }
 
-        public static Bitmap TakeScreenshotInteractive(Form owner)
+        public static Bitmap TakeScreenshotInteractive(Form owner, bool hideOwnerForm = true)
         {
             using (var form = new TakeScreenshotForm())
             {
-                return form.takeScreenshot(owner);
+                return form.takeScreenshot(owner, hideOwnerForm);
             }
         }
     }
